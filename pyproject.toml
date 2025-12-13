@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agentskills-mcp"
+dynamic = ["version"]
+description = "An MCP server for bringing Anthropic's Agent Skills to any MCP-compatible agent."
+authors = [
+    { name = "jinli.yl", email = "jinli.yl@alibaba-inc.com" },
+    { name = "caozouying.czy", email = "caozouying.czy@alibaba-inc.com" },
+]
+license = {file = "LICENSE"}
+readme = "README.md"
+keywords = [
+  "llm", "agent", "skills",
+  "claude-skills", "anthropic-agent-skills",
+  "mcp", "model-context-protocol", "flowllm",
+  "progressive-disclosure"
+]
+requires-python = ">=3.10"
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+
+dependencies = [
+    "flowllm>=0.2.0.7",
+]
+
+[project.optional-dependencies]
+
+dev = [
+    "pytest>=8.4.2",
+    "pytest_asyncio>=1.2.0",
+    "pre-commit",
+    "mkdocs-shadcn",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agentskills_mcp*"]
+
+[tool.setuptools.package-data]
+flowllm = [
+    "**/*.yaml",
+]
+
+[tool.setuptools.dynamic]
+version = {attr = "agentskills_mcp.__version__"}
+
+[project.urls]
+Homepage = "https://github.com/zouyingcao/agentskills-mcp"
+Documentation = "https://github.com/zouyingcao/agentskills-mcp/README.md"
+Repository = "https://github.com/zouyingcao/agentskills-mcp"
+
+[project.scripts]
+agentskills-mcp = "agentskills_mcp.main:main"
+

@@ -15,16 +15,16 @@
   <a href="./README_zh.md">简体中文</a> | English
 </p>
 
-<head> 
-    <script defer src="https://use.fontawesome.com/releases/v5.0.13/js/all.js"></script> 
-    <script defer src="https://use.fontawesome.com/releases/v5.0.13/js/v4-shims.js"></script> 
-</head> 
+<head>
+    <script defer src="https://use.fontawesome.com/releases/v5.0.13/js/all.js"></script>
+    <script defer src="https://use.fontawesome.com/releases/v5.0.13/js/v4-shims.js"></script>
+</head>
 <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.0.13/css/all.css">
 
 ## 📖 Project Overview
 
-**Agent Skills** is a new function recently introduced by Anthropic. By packaging specialized skills into modular resources, it allows Claude to transform on demand into a “tailored expert” suited to any scenario. 
-**AgentSkills MCP**, built on the [FlowLLM](https://github.com/flowllm-ai/flowllm) framework, unlocks Claude’s proprietary Agent Skills for any MCP-compatible agent. 
+**Agent Skills** is a new function recently introduced by Anthropic. By packaging specialized skills into modular resources, it allows Claude to transform on demand into a “tailored expert” suited to any scenario.
+**AgentSkills MCP**, built on the [FlowLLM](https://github.com/flowllm-ai/flowllm) framework, unlocks Claude’s proprietary Agent Skills for any MCP-compatible agent.
 It implements the **Progressive Disclosure** architecture proposed in Anthropic’s official [Agent Skills engineering blog](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills), enabling agents to load necessary skills as needed, thereby efficiently utilizing limited context windows.
 
 ### 💡 Why Choose AgentSkills MCP?

@@ -115,13 +115,13 @@ class ReadReferenceFileOp(BaseAsyncToolOp):
         skill_name = self.input_dict["skill_name"]
         file_name = self.input_dict["file_name"]
         # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
-        skill_dir = Path(C.service_config.metadata["skill_dir"]) ###
+        skill_dir = Path(C.service_config.metadata["skill_dir"])
         logger.info(
             f"🔧 Tool called: read_reference_file(skill_name='{skill_name}', file_name='{file_name}') "
             f"with skill_dir={skill_dir}",
         )
 
-        file_path = skill_dir / skill_name / file_name ###
+        file_path = skill_dir / skill_name / file_name
         if not file_path.exists():
             content = f"File '{file_name}' not found in skill '{skill_name}'"
             logger.exception(content)

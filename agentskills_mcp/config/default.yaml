@@ -22,7 +22,7 @@ flow:
 
   run_shell_command:
     flow_content: RunShellCommandOp()
-  
+
 llm:
   default:
     backend: openai_compatible

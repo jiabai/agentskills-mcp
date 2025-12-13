@@ -52,8 +52,9 @@ class RunShellCommandOp(BaseAsyncToolOp):
           is logged but the command execution continues
         - The subprocess uses the current environment variables (os.environ.copy())
     """
+
     file_path: str = __file__
-    
+
     def __init__(self, auto_install_deps: bool = False, **kwargs):
         """Initialize RunShellCommandOp.
 

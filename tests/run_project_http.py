@@ -10,6 +10,7 @@ This module exercises the agentskills-mcp MCP service by:
 
 It is intended as an integration/diagnostic script rather than a unit test.
 """
+
 import sys
 import json
 import asyncio
@@ -18,7 +19,6 @@ from loguru import logger
 from fastmcp.client.client import CallToolResult
 from flowllm.core.utils.fastmcp_client import FastMcpClient
 from agentskills_mcp.core.utils.service_runner import AgentSkillsMcpServiceRunner
-
 
 
 async def test_mcp_service(mcp_config) -> None:
@@ -84,5 +84,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Please provide the skill directory as a command line argument.")
         sys.exit(1)
-    skill_dir = sys.argv[1]
-    main(skill_dir)
+    main(sys.argv[1])

@@ -167,7 +167,7 @@ class LoadSkillMetadataOp(BaseAsyncToolOp):
         # Build dictionary mapping skill names to their metadata
         # skill_metadata_dict = {}
         skill_num = 0
-        skill_metadata_context = "Available skills (each line is \"- <skill_name>: <skill_description>\"):"
+        skill_metadata_context = 'Available skills (each line is "- <skill_name>: <skill_description>"):'
         for skill_file in skill_files:
             # Read the SKILL.md file content
             content = skill_file.read_text(encoding="utf-8")

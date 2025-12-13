@@ -10,6 +10,7 @@ This module exercises the agentskills-mcp MCP service by:
 
 It is intended as an integration/diagnostic script rather than a unit test.
 """
+
 import sys
 import json
 import asyncio
@@ -83,5 +84,4 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("Please provide the skill directory as a command line argument.")
         sys.exit(1)
-    skill_dir = sys.argv[1]
-    main(skill_dir)
+    main(sys.argv[1])

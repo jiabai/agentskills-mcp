@@ -150,7 +150,7 @@ This tool executes shell commands and can automatically detect and install depen
 
 ### Returns
 
-str: The combined stdout and stderr output from the command execution. The output is decoded as UTF-8 and formatted as: "{stdout}\n{stderr}". 
+str: The combined stdout and stderr output from the command execution. The output is decoded as UTF-8 and formatted as: "{stdout}\n{stderr}".
 
 
 > [!NOTE]

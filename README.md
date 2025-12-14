@@ -24,10 +24,9 @@ It implements the **Progressive Disclosure** architecture proposed in Anthropic�
 
 ### 💡 Why Choose AgentSkills MCP?
 
-- ✅ **Zero-Code Configuration**: one-command install (`pip install agentskills-mcp` or `uv pip install agentskills-mcp`)
+- ✅ **Zero-Code Configuration**: one-command install (`pip install agentskills-mcp`)
 - ✅ **Out-of-the-Box**: uses official Skill format and fully compatible with [Anthropic’s Agent Skills](https://github.com/anthropics/skills)
-- ✅ **MCP Support**: multiple transports (stdio/SSE/HTTP), works with any MCP-compatible agent
-<!-- - ✅ **Progressive Disclosure**: smart context loading, minimal overhead until skills are needed -->
+- ✅ **MCP Support**: multiple transports (stdio/SSE/HTTP), works with any MCP-compatible agent<!-- - ✅ **Progressive Disclosure**: smart context loading, minimal overhead until skills are needed -->
 - ✅ **Flexible Skill Path**: custom skill directories with automatic detection, parsing, and loading
 
 ## 🔥 Latest Updates

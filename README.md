@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <a href="./README_zh.md">简体中文</a> | English
+  <a href="./README_ZH.md">简体中文</a> | English
 </p>
 
 

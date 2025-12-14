@@ -72,7 +72,7 @@ pip install -e .
 mkdir skills
 ```
 
-2. Clone from open-source GitHub repositories, e.g., 
+2. Clone from open-source GitHub repositories, e.g.,
 
 ```bash
 https://github.com/anthropics/skills

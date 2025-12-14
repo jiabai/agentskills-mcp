@@ -66,13 +66,13 @@ pip install -e .
 ---
 ### Load Skills
 
-1. Create a directory to store Skills, for example:
+1. Create a directory to store Skills, like:
 
 ```bash
 mkdir skills
 ```
 
-2. Clone from open-source GitHub repositories, e.g.:
+2. Clone from open-source GitHub repositories, e.g., 
 
 ```bash
 https://github.com/anthropics/skills

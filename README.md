@@ -227,7 +227,7 @@ For detailed parameters and usage examples, see the [documentation](docs/tools.m
 | `mcp.transport`        | Transport mode: `stdio` (stdin/stdout, good for local), `sse` (Server-Sent Events, good for online apps), `http` (RESTful, good for lightweight remote calls) | `mcp.transport=stdio`                   |
 | `mcp.host`             | Host address (for sse/http transport only)                                                                                                                             | `mcp.host=0.0.0.0`                      |
 | `mcp.port`             | Port number (for sse/http transport only)                                                                                                                                     | `mcp.port=8001`                         |
-| `metadata.skill_dir`   | Skills Directory (required)                                                                                                                       | `metadata.dir=./skills`                 |
+| `metadata.skill_dir`   | Skills Directory (required)                                                                                                                       | `metadata.skill_dir=./skills`                 |
 <!-- | `llm.default.model_name` | Default LLM model name (overrides settings in config files)                                                                                             | `llm.default.model_name=qwen3-30b-a3b-thinking-2507` | -->
 
 For the full set of available options and defaults, refer to [default.yaml](./agentskills_mcp/config/default.yaml).

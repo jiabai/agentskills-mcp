@@ -230,7 +230,7 @@ python run_skill_agent.py
 | `mcp.transport`          | 传输模式：`stdio`（标准输入/输出，适合本地）、`sse`（Server-Sent Events，适合在线应用）、`http`（RESTful，适合轻量远程调用）                                                                                               | `mcp.transport=stdio`                             |
 | `mcp.host`               | 主机地址（仅用于 sse/http 传输）                                                                                                                                                             | `mcp.host=0.0.0.0`                                |
 | `mcp.port`               | 端口号（仅用于 sse/http 传输）                                                                                                                                                               | `mcp.port=8001`                                   |
-| `metadata.skill_dir`               | Skills的存放目录（必需） | `metadata.dir=./skills`                                   |
+| `metadata.skill_dir`               | Skills的存放目录（必需） | `metadata.skill_dir=./skills`                                   |
 <!-- | `llm.default.model_name` | 默认 LLM 模型名称（会覆盖配置文件中的设置）                                                                                                                                                  | `llm.default.model_name=qwen3-30b-a3b-thinking-2507` | -->
 
 

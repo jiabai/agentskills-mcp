@@ -36,6 +36,7 @@ classifiers = [
 
 dependencies = [
     "flowllm>=0.2.0.7",
+    "pipreqs"
 ]
 
 [project.optional-dependencies]
@@ -49,15 +50,16 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agentskills_mcp*"]
+include = ["mcp_agentskills*"]
+exclude = ["tests*"]
 
 [tool.setuptools.package-data]
-flowllm = [
+mcp_agentskills = [
     "**/*.yaml",
 ]
 
 [tool.setuptools.dynamic]
-version = {attr = "agentskills_mcp.__version__"}
+version = {attr = "mcp_agentskills.__version__"}
 
 [project.urls]
 Homepage = "https://github.com/zouyingcao/agentskills-mcp"
@@ -65,5 +67,5 @@ Documentation = "https://github.com/zouyingcao/agentskills-mcp/README.md"
 Repository = "https://github.com/zouyingcao/agentskills-mcp"
 
 [project.scripts]
-agentskills-mcp = "agentskills_mcp.main:main"
+agentskills-mcp = "mcp_agentskills.main:main"
 

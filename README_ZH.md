@@ -29,7 +29,7 @@ AgentSkills MCP基于[FlowLLM](https://github.com/flowllm-ai/flowllm)框架，�
 - ✅ **零代码配置**：一键安装(``pip install mcp-agentskills`` 或 ``uv pip install mcp-agentskills``)
 - ✅ **开箱即用**: 面向官方Skill格式设计，完全兼容[Anthropic的Agent Skills](https://github.com/anthropics/skills)
 - ✅ **MCP支持**：多种传输方式（stdio/SSE/HTTP），适配任何支持MCP的Agent
-- ✅ **智能识别**：兼容扁平与分层Skill目录，并自动检测、解析与加载
+- ✅ **Skill路径灵活**：自定义Skill目录，并自动检测、解析与加载
 
 
 ## 🔥 最新动态

@@ -3,7 +3,15 @@
 This module provides the LoadSkillMetadataOp class which scans the skills
 directory recursively and extracts metadata (name and description) from all
 SKILL.md files. The metadata is parsed from YAML frontmatter in each SKILL.md
-file and returned as a dictionary mapping skill names to their metadata.
+file and returned a string in the format: 
+    ```
+    Available skills (each line is "- <skill_name>: <skill_description>"):\n
+    - <skill_name_1>: <skill_description_1>\n
+    - <skill_name_2>: <skill_description_2>\n
+    ...
+    - <skill_name_n>: <skill_description_n>\n
+    ``` 
+This string can be used to display all available skills.
 """
 
 from pathlib import Path
@@ -25,14 +33,14 @@ class LoadSkillMetadataOp(BaseAsyncToolOp):
     values contain the description and skill directory path.
 
     Returns:
-        dict: A dictionary mapping skill names to their metadata. Each entry
-            has the format:
-            {
-                "skill_name": {
-                    "description": "Skill description text",
-                    "skill_dir": "/path/to/skill/directory"
-                }
-            }
+        str: A string containing the skill metadata in the format:
+            ```
+            Available skills (each line is "- <skill_name>: <skill_description>"):\n
+            - <skill_name_1>: <skill_description_1>\n
+            - <skill_name_2>: <skill_description_2>\n
+            ...
+            - <skill_name_n>: <skill_description_n>\n
+            ```
 
     Note:
         The skills directory path is obtained from `self.context.skill_dir`.
@@ -126,46 +134,39 @@ class LoadSkillMetadataOp(BaseAsyncToolOp):
         """Execute the load skill metadata operation.
 
         Scans the skills directory recursively for all SKILL.md files,
-        extracts their metadata from YAML frontmatter, and builds a dictionary
-        mapping skill names to their metadata (description and directory path).
+        extracts their metadata from YAML frontmatter, and constructs 
+        a string to display the name and descriptions of all available skills.
 
         The method:
-        1. Gets the skills directory path from the context
+        1. Gets the skills directory path from the service_config
         2. Recursively searches for all SKILL.md files
         3. Parses each file's frontmatter to extract metadata
-        4. Builds a dictionary with skill names as keys
-        5. Sets the output with the complete metadata dictionary
+        4. Builds a string with skill names and their descriptions
+        5. Sets the output with the complete metadata string
 
         Returns:
-            None: The result is set via `self.set_output()` with a dictionary
+            None: The result is set via `self.set_output()` with a string 
                 in the format:
-                {
-                    "skill_name_1": {
-                        "description": "Description of skill 1",
-                        "skill_dir": "/path/to/skill1"
-                    },
-                    "skill_name_2": {
-                        "description": "Description of skill 2",
-                        "skill_dir": "/path/to/skill2"
-                    },
-                    ...
-                }
+                "Available skills (each line is "- <skill_name>: <skill_description>"):\n
+                - <skill_name_1>: <skill_description_1>\n
+                - <skill_name_2>: <skill_description_2>\n
+                ...
+                - <skill_name_n>: <skill_description_n>\n" 
 
         Note:
             Only skills with valid metadata (both name and description) are
             included in the result. Invalid or missing metadata is logged as
             a warning but does not stop the process.
         """
-        # Get the skills directory path from context
-        skill_dir = Path(C.service_config.metadata["skill_dir"])
+        # Get the skills directory path from service_config
+        skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
         logger.info(f"🔧 Tool called: load_skill_metadata(path={skill_dir})")
 
         # Recursively find all SKILL.md files in the skills directory
         skill_files = list(skill_dir.rglob("SKILL.md"))
         assert skill_files, "No SKILL.md files found in skills directory"
 
-        # Build dictionary mapping skill names to their metadata
-        # skill_metadata_dict = {}
+        # Add skill metadatas to agent context
         skill_num = 0
         skill_metadata_context = 'Available skills (each line is "- <skill_name>: <skill_description>"):'
         for skill_file in skill_files:
@@ -175,19 +176,14 @@ class LoadSkillMetadataOp(BaseAsyncToolOp):
             metadata = await self.parse_skill_metadata(content, str(skill_file))
 
             if metadata:
+                skill_num += 1
                 # Get the parent directory of the SKILL.md file as the skill directory
                 skill_dir = skill_file.parent.as_posix()
-                # Store metadata with skill name as key
                 name = metadata["name"]
                 description = metadata["description"]
-                # skill_metadata_dict[name] = {
-                #     "description": description,
-                #     "skill_dir": skill_dir,
-                # }
-                skill_num += 1
                 skill_metadata_context += f"\n- {name}: {description}"
                 logger.info(f"✅ Loaded skill {name} metadata skill_dir={skill_dir}")
 
         logger.info(f"✅ Loaded {skill_num} skill metadata entries")
-        # Set the output with the complete metadata dictionary
+        # Set the output with the complete metadata string
         self.set_output(skill_metadata_context)

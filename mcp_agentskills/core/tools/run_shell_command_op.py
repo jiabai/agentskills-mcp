@@ -30,7 +30,7 @@ class RunShellCommandOp(BaseAsyncToolOp):
 
     The operation will:
     1. Extract skill_name and command from input
-    2. Look up the skill directory from skill_metadata_dict
+    2. Get the skill directory from {service_config.metadata["skill_dir"]} / {skill_name}
     3. Change to the skill directory before executing the command
     4. For Python commands, automatically detect and install dependencies
        using pipreqs (if available and auto_install_deps parameter is enabled)
@@ -43,7 +43,7 @@ class RunShellCommandOp(BaseAsyncToolOp):
             whitespace, with stdout and stderr concatenated with a newline.
 
     Note:
-        - The skill_name must exist in `self.context.skill_metadata_dict`
+        - The skill_name must exist in `C.service_config.metadata["skill_dir"]`
         - The command is executed in the skill's directory using `cd {skill_dir}/{skill_name} && {command}`
         - For Python commands (containing "py"), the tool attempts to auto-install
           dependencies using pipreqs if it's available in the system PATH and
@@ -85,7 +85,9 @@ class RunShellCommandOp(BaseAsyncToolOp):
         return ToolCall(
             **{
                 "name": "run_shell_command",
-                "description": self.get_prompt("tool_desc"),
+                "description": self.get_prompt("tool_desc").format(
+                    skill_dir=Path(C.service_config.metadata["skill_dir"]).resolve()
+                ),
                 "input_schema": {
                     "skill_name": {
                         "type": "string",
@@ -141,10 +143,8 @@ class RunShellCommandOp(BaseAsyncToolOp):
         # Extract skill name and command from input parameters
         skill_name = self.input_dict["skill_name"]
         command: str = self.input_dict["command"]
-        # Look up the skill directory from the metadata dictionary
-        # This dictionary should be populated by LoadSkillMetadataOp
-        # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
-        skill_dir = Path(C.service_config.metadata["skill_dir"])
+        
+        skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
         logger.info(f"🔧 run shell command: skill_name={skill_name} skill_dir={skill_dir} command={command}")
 
         # Auto-install dependencies for Python scripts if pipreqs is available
@@ -168,11 +168,8 @@ class RunShellCommandOp(BaseAsyncToolOp):
                 else:
                     logger.info("❗️ pipreqs not found, skipping dependency auto-install.")
 
-        # Construct the full command to execute in the skill directory
-        # This ensures the command runs in the correct context
-        full_command = f"cd {skill_dir}/{skill_name} && {command}"
         proc = await asyncio.create_subprocess_shell(
-            full_command,
+            command,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=os.environ.copy(),

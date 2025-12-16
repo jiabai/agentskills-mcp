@@ -2,7 +2,7 @@
 
 This module provides the LoadSkillOp class which loads the content of a
 SKILL.md file from a specified skill directory. The skill directory is
-looked up from the skill metadata dictionary using the skill name. If the
+read from {service_config.metadata["skill_dir"]} / {skill_name}. If the
 SKILL.md file contains YAML frontmatter, only the content after the
 frontmatter is returned; otherwise, the full file content is returned.
 """
@@ -21,12 +21,11 @@ class LoadSkillOp(BaseAsyncToolOp):
     """Operation for loading a specific skill's instructions.
 
     This tool loads the content of a SKILL.md file for a given skill name.
-    The skill directory is retrieved from the context's skill_metadata_dict,
-    which should be populated by LoadSkillMetadataOp beforehand.
+    The skill directory is read from the service_config.
 
     The tool:
     1. Takes a skill_name as input
-    2. Looks up the skill directory from skill_metadata_dict
+    2. Gets the skill directory from {service_config.metadata["skill_dir"]} / {skill_name}
     3. Reads the SKILL.md file from that directory
     4. If YAML frontmatter is present, returns only the content after it
     5. If no frontmatter is found, returns the full file content
@@ -38,7 +37,7 @@ class LoadSkillOp(BaseAsyncToolOp):
             If the skill is not found, returns an error message string.
 
     Note:
-        - The skill_name must exist in `self.context.skill_metadata_dict`
+        - The skill_name must exist in `C.service_config.metadata["skill_dir"]`
         - The SKILL.md file must exist in the skill directory
         - YAML frontmatter is detected by splitting on "---" delimiters
     """
@@ -76,13 +75,13 @@ class LoadSkillOp(BaseAsyncToolOp):
         """Execute the load skill operation.
 
         Loads the SKILL.md file content for the specified skill name. The
-        method retrieves the skill directory from the context's skill metadata
-        dictionary, reads the SKILL.md file, and extracts the instructions
+        method gets the skill directory from {service_config.metadata["skill_dir"]} / 
+        {skill_name}, reads the SKILL.md file, and extracts the instructions
         content (excluding YAML frontmatter if present).
 
         The method:
         1. Extracts the skill_name from input_dict
-        2. Looks up the skill directory from skill_metadata_dict
+        2. Gets the skill directory from {service_config.metadata["skill_dir"]} / {skill_name}
         3. Constructs the path to SKILL.md file
         4. Checks if the file exists
         5. Reads the file content
@@ -96,9 +95,8 @@ class LoadSkillOp(BaseAsyncToolOp):
                 - An error message string (if skill file is not found)
 
         Raises:
-            KeyError: If skill_name is not found in skill_metadata_dict.
-                This should be handled by ensuring LoadSkillMetadataOp is
-                called before LoadSkillOp.
+            Error: If skill_name is not found in the skill directory.
+                Remember to call LoadSkillMetadataOp before LoadSkillOp and get the available skills.
 
         Note:
             - If the file has YAML frontmatter (format: "---\n...\n---\n..."),
@@ -111,7 +109,7 @@ class LoadSkillOp(BaseAsyncToolOp):
         # Look up the skill directory from the metadata dictionary
         # This dictionary should be populated by LoadSkillMetadataOp
         # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
-        skill_dir = Path(C.service_config.metadata["skill_dir"])
+        skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
         logger.info(f"🔧 Tool called: load_skill(skill_name='{skill_name}') with skill_dir={skill_dir}")
 
         # Construct the path to the SKILL.md file

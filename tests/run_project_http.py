@@ -18,7 +18,7 @@ import asyncio
 from loguru import logger
 from fastmcp.client.client import CallToolResult
 from flowllm.core.utils.fastmcp_client import FastMcpClient
-from agentskills_mcp.core.utils.service_runner import AgentSkillsMcpServiceRunner
+from mcp_agentskills.core.utils.service_runner import AgentSkillsMcpServiceRunner
 
 
 async def test_mcp_service(mcp_config) -> None:

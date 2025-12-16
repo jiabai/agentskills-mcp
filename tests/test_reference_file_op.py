@@ -3,8 +3,8 @@
 import sys
 import asyncio
 
-from agentskills_mcp import AgentSkillsMcpApp
-from agentskills_mcp.core.tools import LoadSkillMetadataOp, ReadReferenceFileOp
+from mcp_agentskills import AgentSkillsMcpApp
+from mcp_agentskills.core.tools import LoadSkillMetadataOp, ReadReferenceFileOp
 
 
 async def main(skill_dir: str, skill_name: str, file_name: str):

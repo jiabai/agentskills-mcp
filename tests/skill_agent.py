@@ -9,9 +9,10 @@ import json
 import datetime
 from typing import Dict
 from loguru import logger
+from jinja2 import Template
+from skill_agent_prompt import SYSTEM_PROMPT, SYSTEM_PROMPT_ZH
 
 from flowllm.core.enumeration import Role
-from flowllm.core.context import PromptHandler
 from flowllm.core.llm import OpenAICompatibleLLM
 from flowllm.core.schema import Message, ToolCall
 from flowllm.core.utils import load_env, FastMcpClient
@@ -37,7 +38,6 @@ class SkillAgent:
         model_name: The language model to use (default: "qwen3_30b_instruct")
         max_steps: Maximum number of reasoning steps (default: 50)
         prompt_path (str): Path used for prompt loading
-        language: Language for prompt handling
 
     Note:
         - The skill_dir must contain SKILL.md files with valid metadata
@@ -48,7 +48,6 @@ class SkillAgent:
         self,
         model_name: str = "qwen3_30b_instruct",
         max_steps: int = 50,
-        prompt_path: str = "skill_agent_prompt.yaml",
         language: str = "",
     ):
         """Initialize the skill agent with configuration.
@@ -59,13 +58,14 @@ class SkillAgent:
             max_steps: Maximum number of reasoning steps the agent can take.
                 Default is 5. Note: This is passed as max_retries to the parent.
             prompt_path: Path to the prompt file. Default is "skill_agent_prompt.yaml".
-            language: Language for prompt handling
         """
         self.llm = OpenAICompatibleLLM(model_name=model_name)
         self.max_steps = max_steps
-        self.prompt_path = prompt_path
         self.language = language
-        self.prompt = PromptHandler(language=self.language).load_prompt_by_file(self.prompt_path)
+        if self.language == "zh":
+            self.prompt = Template(SYSTEM_PROMPT_ZH.lstrip())
+        else:
+            self.prompt = Template(SYSTEM_PROMPT.lstrip())
 
     async def run(self, query: str):
         """Run the skill agent with the given query.
@@ -102,10 +102,9 @@ class SkillAgent:
             messages = [
                 Message(
                     role=Role.SYSTEM,
-                    content=self.prompt.prompt_format(
-                        "system_prompt",
-                        time=now_time,
-                    ),
+                    content=self.prompt.render({
+                        "time":now_time,
+                    }),
                 ),
                 Message(role=Role.USER, content=query),
             ]

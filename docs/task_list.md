@@ -57,7 +57,8 @@
 |----|------|------|------|------|
 | T2.2.1 | 创建 JWT 认证中间件 | 创建 `core/middleware/auth.py` | T2.1.2 | ⬜ |
 | T2.2.2 | 创建 MCP Token 认证 | 创建 `api/mcp/auth.py` | T2.1.3 | ⬜ |
-| T2.2.3 | 创建中间件导出 | 创建 `core/middleware/__init__.py` | T2.2.1 | ⬜ |
+| T2.2.3 | 创建限流中间件 | 创建 `core/middleware/rate_limit.py` | 无 | ⬜ |
+| T2.2.4 | 创建中间件导出 | 创建 `core/middleware/__init__.py` | T2.2.1-T2.2.3 | ⬜ |
 
 ### 2.3 Repository 层
 
@@ -76,7 +77,8 @@
 | T2.4.1 | 创建认证服务 | 创建 `services/auth.py` | T2.1.1, T2.1.2, T2.3.2 | ⬜ |
 | T2.4.2 | 创建用户服务 | 创建 `services/user.py` | T2.3.2 | ⬜ |
 | T2.4.3 | 创建 Token 服务 | 创建 `services/token.py` | T2.1.3, T2.3.4 | ⬜ |
-| T2.4.4 | 创建 Service 导出 | 创建 `services/__init__.py` | T2.4.1-T2.4.3 | ⬜ |
+| T2.4.4 | 创建 Skill 服务 | 创建 `services/skill.py` | T2.3.3 | ⬜ |
+| T2.4.5 | 创建 Service 导出 | 创建 `services/__init__.py` | T2.4.1-T2.4.4 | ⬜ |
 
 ---
 
@@ -116,28 +118,27 @@
 | T3.4.3 | 实现删除Token | DELETE /api/v1/tokens/{token_id} | T2.4.3, T3.1.1 | ⬜ |
 | T3.4.4 | 创建Token路由 | 创建 `api/v1/tokens.py` | T3.4.1-T3.4.3 | ⬜ |
 
-### 3.5 Skill 服务与 API
+### 3.5 Skill API
 
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
 | T3.5.1 | 创建 Skill 存储工具 | 创建 `core/utils/skill_storage.py` | T1.1.1 | ⬜ |
-| T3.5.2 | 创建 Skill 服务 | 创建 `services/skill.py` | T2.3.3, T3.5.1 | ⬜ |
-| T3.5.3 | 实现列出Skills | GET /api/v1/skills | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.4 | 实现创建Skill | POST /api/v1/skills | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.5 | 实现获取Skill详情 | GET /api/v1/skills/{skill_id} | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.6 | 实现更新Skill | PUT /api/v1/skills/{skill_id} | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.7 | 实现删除Skill | DELETE /api/v1/skills/{skill_id} | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.8 | 实现上传Skill文件 | POST /api/v1/skills/upload | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.9 | 实现列出Skill文件 | GET /api/v1/skills/{skill_id}/files | T3.5.2, T3.1.1 | ⬜ |
-| T3.5.10 | 创建Skill路由 | 创建 `api/v1/skills.py` | T3.5.3-T3.5.9 | ⬜ |
+| T3.5.2 | 实现列出Skills | GET /api/v1/skills | T2.4.4, T3.5.1, T3.1.1 | ⬜ |
+| T3.5.3 | 实现创建Skill | POST /api/v1/skills | T2.4.4, T3.5.1, T3.1.1 | ⬜ |
+| T3.5.4 | 实现获取Skill详情 | GET /api/v1/skills/{skill_id} | T2.4.4, T3.1.1 | ⬜ |
+| T3.5.5 | 实现更新Skill | PUT /api/v1/skills/{skill_id} | T2.4.4, T3.1.1 | ⬜ |
+| T3.5.6 | 实现删除Skill | DELETE /api/v1/skills/{skill_id} | T2.4.4, T3.1.1 | ⬜ |
+| T3.5.7 | 实现上传Skill文件 | POST /api/v1/skills/upload | T2.4.4, T3.5.1, T3.1.1 | ⬜ |
+| T3.5.8 | 实现列出Skill文件 | GET /api/v1/skills/{skill_id}/files | T2.4.4, T3.5.1, T3.1.1 | ⬜ |
+| T3.5.9 | 创建Skill路由 | 创建 `api/v1/skills.py` | T3.5.2-T3.5.8 | ⬜ |
 
 ### 3.6 路由汇总
 
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
-| T3.6.1 | 创建API路由汇总 | 创建 `api/router.py` | T3.2.4, T3.3.5, T3.4.4, T3.5.10 | ⬜ |
+| T3.6.1 | 创建API路由汇总 | 创建 `api/router.py` | T3.2.4, T3.3.5, T3.4.4, T3.5.9 | ⬜ |
 | T3.6.2 | 创建API模块导出 | 创建 `api/__init__.py` | T3.6.1 | ⬜ |
-| T3.6.3 | 创建v1模块导出 | 创建 `api/v1/__init__.py` | T3.2.4, T3.3.5, T3.4.4, T3.5.10 | ⬜ |
+| T3.6.3 | 创建v1模块导出 | 创建 `api/v1/__init__.py` | T3.2.4, T3.3.5, T3.4.4, T3.5.9 | ⬜ |
 
 ---
 
@@ -169,10 +170,13 @@
 
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
-| T5.1.1 | 创建 FastAPI 入口 | 更新 `main.py` | T3.6.1, T4.2.4 | ⬜ |
+| T5.1.1 | 创建 FastAPI 应用入口 | 创建 `api_app.py`，包含应用工厂函数 `create_application()` | T3.6.1, T4.2.4 | ⬜ |
 | T5.1.2 | 添加 CORS 中间件 | 配置跨域支持 | T5.1.1 | ⬜ |
 | T5.1.3 | 添加健康检查端点 | GET /health | T5.1.1 | ⬜ |
-| T5.1.4 | 创建应用工厂函数 | create_application() | T5.1.1 | ⬜ |
+| T5.1.4 | 更新包版本号 | 更新 `__init__.py` 中的版本号 | T5.1.1 | ⬜ |
+| T5.1.5 | 更新 README | 添加多用户模式使用说明 | T5.1.1 | ⬜ |
+
+> **注意**: 现有 `main.py`（FlowLLM 入口）保持不变，用于 stdio/SSE 模式。
 
 ### 5.2 部署配置
 
@@ -203,7 +207,7 @@
 | T6.2.3 | 测试 Token 工具 | 测试 `core/security/token.py` | T2.1.3 | ⬜ |
 | T6.2.4 | 测试认证服务 | 测试 `services/auth.py` | T2.4.1 | ⬜ |
 | T6.2.5 | 测试用户服务 | 测试 `services/user.py` | T2.4.2 | ⬜ |
-| T6.2.6 | 测试 Skill 服务 | 测试 `services/skill.py` | T3.5.2 | ⬜ |
+| T6.2.6 | 测试 Skill 服务 | 测试 `services/skill.py` | T2.4.4 | ⬜ |
 
 ### 6.3 集成测试
 
@@ -212,7 +216,7 @@
 | T6.3.1 | 测试认证 API | 测试 `/api/v1/auth/*` | T3.2.4 | ⬜ |
 | T6.3.2 | 测试用户 API | 测试 `/api/v1/users/*` | T3.3.5 | ⬜ |
 | T6.3.3 | 测试 Token API | 测试 `/api/v1/tokens/*` | T3.4.4 | ⬜ |
-| T6.3.4 | 测试 Skill API | 测试 `/api/v1/skills/*` | T3.5.10 | ⬜ |
+| T6.3.4 | 测试 Skill API | 测试 `/api/v1/skills/*` | T3.5.9 | ⬜ |
 | T6.3.5 | 测试 MCP API | 测试 `/mcp` 和 `/sse` | T4.2.4 | ⬜ |
 
 ---
@@ -222,12 +226,12 @@
 | 阶段 | 任务数 | 描述 |
 |------|--------|------|
 | Phase 1 | 17 | 基础设施搭建 |
-| Phase 2 | 16 | 安全与认证模块 |
-| Phase 3 | 24 | API 接口实现 |
+| Phase 2 | 18 | 安全与认证模块 |
+| Phase 3 | 22 | API 接口实现 |
 | Phase 4 | 8 | MCP 服务集成 |
-| Phase 5 | 8 | 应用入口与部署 |
+| Phase 5 | 9 | 应用入口与部署 |
 | Phase 6 | 13 | 测试 |
-| **总计** | **86** | |
+| **总计** | **87** | |
 
 ---
 
@@ -246,7 +250,7 @@ Phase 2 (安全认证)
     │                       │
     │                       └── T2.3.x (Repository)
     │                                   │
-    │                                   └── T2.4.x (Service)
+    │                                   └── T2.4.x (Service，含 Skill Service)
     │
 Phase 3 (API)
     │
@@ -255,7 +259,7 @@ Phase 3 (API)
     │       ├── T3.2.x (认证API)
     │       ├── T3.3.x (用户API)
     │       ├── T3.4.x (TokenAPI)
-    │       └── T3.5.x (Skill API)
+    │       └── T3.5.x (Skill API，依赖 T2.4.4)
     │               │
     │               └── T3.6.x (路由汇总)
     │
@@ -267,7 +271,7 @@ Phase 4 (MCP集成)
     │
 Phase 5 (部署)
     │
-    ├── T5.1.x (FastAPI入口)
+    ├── T5.1.x (FastAPI入口 api_app.py，保留 main.py)
     │       │
     │       └── T5.2.x (部署配置)
     │

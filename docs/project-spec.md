@@ -4,6 +4,68 @@
 
 ---
 
+## ⚠️ 重要说明：目标架构 vs 当前架构
+
+> **本文档描述的是改造完成后的目标架构**，而非当前项目结构。
+>
+> - **目标架构**：包含用户系统、认证系统、API层、数据库层等新增模块
+> - **当前架构**：仅包含基础的 MCP 工具（`core/tools/`）和配置解析（`config/`）
+>
+> 改造过程中，将逐步创建以下新增目录：
+> - `models/` - 数据库模型
+> - `schemas/` - Pydantic 数据验证模型
+> - `repositories/` - 数据访问层
+> - `services/` - 业务逻辑层
+> - `api/` - API 路由层
+> - `core/security/` - 安全工具
+> - `core/middleware/` - 中间件
+> - `db/` - 数据库会话和迁移
+>
+> 详见 [项目结构](#7-项目结构) 章节。
+
+---
+
+## 📖 文档阅读指南
+
+> **本文档较长**，建议按以下方式阅读：
+
+### 快速导航
+
+| 章节 | 内容 | 适用场景 |
+|------|------|---------|
+| [1. 项目概述](#1-项目概述) | 改造目标、技术选型 | 了解项目背景 |
+| [2. 系统架构](#2-系统架构) | 分层架构、用户隔离 | 理解整体设计 |
+| [3. 数据模型](#3-数据模型) | User/Skill/APIToken 模型 | 实现数据库层 |
+| [4. API 接口规范](#4-api-接口规范) | RESTful API 设计 | 实现接口层 |
+| [5. 认证机制](#5-认证机制) | JWT/API Token 认证 | 实现安全模块 |
+| [6. MCP工具改造](#6-mcp工具改造) | 工具改造方案 | 改造现有工具 |
+| [7. 项目结构](#7-项目结构) | 目录结构、启动方式 | 创建项目骨架 |
+| [8. 依赖清单](#8-依赖清单) | 第三方依赖 | 配置开发环境 |
+| [9. 配置规范](#9-配置规范) | 环境变量、Settings | 配置管理 |
+| [10. 安全要求](#10-安全要求) | 密码、Token、文件安全 | 安全加固 |
+| [11. 错误处理](#11-错误处理) | 标准错误格式 | 统一错误处理 |
+| [12. 测试要求](#12-测试要求) | 测试策略、覆盖率 | 编写测试 |
+| [13. 部署要求](#13-部署要求) | Docker、迁移、监控 | 部署上线 |
+
+### 代码示例说明
+
+文档中包含大量代码示例，用于说明实现细节：
+
+- **✅ 可直接使用**：标注为"实现代码"的示例可直接复制使用
+- **📝 参考示例**：标注为"示例"的代码需要根据实际情况调整
+- **⚠️ 注意事项**：代码注释中标注了重要注意事项
+
+### 配套文档
+
+| 文档 | 用途 |
+|------|------|
+| [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md) | 重构步骤和注意事项 |
+| [task_list.md](./task_list.md) | 任务分解和执行顺序 |
+| [checklist.md](./checklist.md) | 验证检查清单 |
+| [tools.md](./tools.md) | MCP 工具文档 |
+
+---
+
 ## 1. 项目概述
 
 ### 1.1 改造目标
@@ -78,6 +140,11 @@
 └── ...
 ```
 
+> **路径风格说明**: 文档中的路径示例使用 Linux/POSIX 风格（正斜杠 `/`）。在 Windows 环境下开发时：
+> - 配置文件中的路径可使用正斜杠或反斜杠
+> - Python 的 `pathlib.Path` 会自动处理跨平台路径
+> - 环境变量 `SKILL_STORAGE_PATH` 在 Windows 下可设置为 `C:\data\skills` 或 `D:\data\skills`
+
 ---
 
 ## 3. 数据模型
@@ -85,50 +152,285 @@
 ### 3.1 User 模型
 
 ```python
-class User:
-    id: UUID              # 主键
-    email: str            # 唯一，用于登录
-    username: str         # 唯一，显示名称
-    hashed_password: str  # bcrypt哈希密码
-    is_active: bool       # 账户状态
-    is_superuser: bool    # 超级管理员标识
-    created_at: datetime  # 创建时间
-    updated_at: datetime  # 更新时间
+from datetime import datetime, timezone
+from typing import List, Optional
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from uuid import UUID, uuid4
+
+class User(Base):
+    __tablename__ = "users"
+    
+    # uuid4 是 callable，SQLAlchemy 会在插入时自动调用生成 UUID
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    is_superuser: Mapped[bool] = mapped_column(default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # 关系定义
+    skills: Mapped[List["Skill"]] = relationship(
+        "Skill", 
+        back_populates="user", 
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
+    tokens: Mapped[List["APIToken"]] = relationship(
+        "APIToken", 
+        back_populates="user", 
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
 ```
 
 ### 3.2 Skill 模型
 
 ```python
-class Skill:
-    id: UUID              # 主键
-    user_id: UUID         # 外键，关联User
-    name: str             # Skill名称
-    description: str      # Skill描述
-    skill_dir: str        # 文件存储路径
-    is_active: bool       # 状态
-    created_at: datetime  # 创建时间
-    updated_at: datetime  # 更新时间
+from datetime import datetime
+from typing import List
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from uuid import UUID, uuid4
+
+class Skill(Base):
+    __tablename__ = "skills"
     
-    # 唯一约束: (user_id, name)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    description: Mapped[str] = mapped_column(String(500), default="")
+    skill_dir: Mapped[str] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # 关系定义
+    user: Mapped["User"] = relationship("User", back_populates="skills")
+    
+    # 表级约束
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uix_user_skill_name"),
+    )
 ```
 
 ### 3.3 APIToken 模型
 
 ```python
-class APIToken:
-    id: UUID              # 主键
-    user_id: UUID         # 外键，关联User
-    name: str             # Token名称
-    token_hash: str       # Token的SHA256哈希
-    is_active: bool       # 状态
-    expires_at: datetime  # 过期时间（可选）
-    last_used_at: datetime # 最后使用时间
-    created_at: datetime  # 创建时间
+from datetime import datetime
+from typing import Optional
+from sqlalchemy import String, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from uuid import UUID, uuid4
+
+class APIToken(Base):
+    __tablename__ = "api_tokens"
+    
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    name: Mapped[str] = mapped_column(String(100))
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    is_active: Mapped[bool] = mapped_column(default=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    
+    # 关系定义
+    user: Mapped["User"] = relationship("User", back_populates="tokens")
+    
+    # 索引
+    __table_args__ = (
+        Index("ix_api_tokens_user_id", "user_id"),
+    )
 ```
 
 ---
 
 ## 4. API 接口规范
+
+### API 版本策略
+
+- **版本标识**: 通过 URL 路径标识（`/api/v1/`）
+- **版本升级规则**:
+  - 重大变更（不兼容）时发布新版本（v2, v3...）
+  - 旧版本保持至少 6 个月的兼容期
+  - 小型变更（新增字段、新增接口）在当前版本迭代
+- **弃用流程**:
+  1. 在响应头添加 `Deprecation: true` 和 `Sunset` 日期
+  2. 在文档中标注弃用时间
+  3. 提前 3 个月通知用户迁移
+
+#### API 版本弃用实现方案
+
+使用 FastAPI 中间件实现自动添加弃用响应头：
+
+```python
+# core/middleware/deprecation.py
+from fastapi import Request, Response
+from starlette.middleware.base import BaseHTTPMiddleware
+from datetime import datetime
+from typing import Dict, Set
+
+# 弃用端点配置：路径 -> 完全移除日期
+DEPRECATED_ENDPOINTS: Dict[str, str] = {
+    "/api/v1/legacy/endpoint": "2025-06-01",
+    "/api/v1/old/feature": "2025-09-01",
+}
+
+# 已弃用的整个版本前缀
+DEPRECATED_VERSIONS: Set[str] = {
+    # "/api/v1",  # 当 v1 整体弃用时启用
+}
+
+
+class DeprecationMiddleware(BaseHTTPMiddleware):
+    """
+    弃用中间件：为已弃用的端点自动添加 Deprecation 和 Sunset 响应头
+    
+    响应头说明：
+    - Deprecation: true - 表示该端点已弃用
+    - Sunset: <date> - 表示该端点将完全移除的日期（RFC 8594）
+    """
+    
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        
+        path = request.url.path
+        
+        # 检查特定端点是否已弃用
+        if path in DEPRECATED_ENDPOINTS:
+            sunset_date = DEPRECATED_ENDPOINTS[path]
+            response.headers["Deprecation"] = "true"
+            response.headers["Sunset"] = sunset_date
+            
+        # 检查整个版本是否已弃用
+        for version_prefix in DEPRECATED_VERSIONS:
+            if path.startswith(version_prefix):
+                response.headers["Deprecation"] = "true"
+                # 从配置或数据库获取具体日落日期
+                response.headers["Sunset"] = "2025-12-31"
+                break
+        
+        return response
+
+
+# 在 api_app.py 中使用
+from fastapi import FastAPI
+from mcp_agentskills.core.middleware.deprecation import DeprecationMiddleware
+
+def create_application() -> FastAPI:
+    app = FastAPI()
+    
+    # 添加弃用中间件
+    app.add_middleware(DeprecationMiddleware)
+    
+    # ... 其他配置
+    
+    return app
+```
+
+#### 端点级别的弃用装饰器（可选）
+
+对于单个端点的弃用，可以使用装饰器：
+
+```python
+# core/decorators/deprecation.py
+from functools import wraps
+from fastapi import Response
+from datetime import datetime
+from typing import Optional
+
+def deprecated(sunset_date: Optional[str] = None, alternative: Optional[str] = None):
+    """
+    标记端点为已弃用
+    
+    Args:
+        sunset_date: 端点完全移除的日期（ISO 8601格式）
+        alternative: 替代端点的路径
+    """
+    def decorator(func):
+        @wraps(func)
+        async def wrapper(*args, **kwargs):
+            # 获取 response 对象（如果在 kwargs 中）
+            response = kwargs.get('response')
+            if response and isinstance(response, Response):
+                response.headers["Deprecation"] = "true"
+                if sunset_date:
+                    response.headers["Sunset"] = sunset_date
+                if alternative:
+                    response.headers["Link"] = f'<{alternative}>; rel="successor-version"'
+            
+            return await func(*args, **kwargs)
+        
+        # 标记函数已弃用（用于文档生成）
+        wrapper._deprecated = True
+        wrapper._sunset_date = sunset_date
+        wrapper._alternative = alternative
+        
+        return wrapper
+    return decorator
+
+
+# 使用示例
+from fastapi import APIRouter, Response
+from mcp_agentskills.core.decorators.deprecation import deprecated
+
+router = APIRouter()
+
+@router.get("/legacy/endpoint")
+@deprecated(sunset_date="2025-06-01", alternative="/api/v1/new/endpoint")
+async def legacy_endpoint(response: Response):
+    '''
+    已弃用的端点
+    
+    **弃用说明**: 该端点将于 2025-06-01 移除，请迁移到 `/api/v1/new/endpoint`
+    '''
+    return {"message": "This endpoint is deprecated"}
+```
+
+#### 版本弃用通知机制
+
+```python
+# services/notification.py
+from datetime import datetime, timedelta
+from typing import List
+
+class DeprecationNotifier:
+    """弃用通知服务"""
+    
+    async def notify_upcoming_deprecation(self):
+        """
+        提前通知即将弃用的端点
+        建议在 CI/CD 或定时任务中执行
+        """
+        notifications = []
+        
+        for endpoint, sunset_date_str in DEPRECATED_ENDPOINTS.items():
+            sunset_date = datetime.fromisoformat(sunset_date_str)
+            days_until_removal = (sunset_date - datetime.now()).days
+            
+            # 提前 90 天、30 天、7 天发送通知
+            if days_until_removal in [90, 30, 7]:
+                notifications.append({
+                    "endpoint": endpoint,
+                    "sunset_date": sunset_date_str,
+                    "days_remaining": days_until_removal,
+                    "severity": "warning" if days_until_removal > 7 else "critical"
+                })
+        
+        # 发送通知（邮件、Webhook 等）
+        await self._send_notifications(notifications)
+    
+    async def _send_notifications(self, notifications: List[dict]):
+        """实际发送通知"""
+        # 实现通知逻辑（邮件、Slack、Webhook 等）
+        pass
+```
 
 ### 4.1 认证模块 `/api/v1/auth`
 
@@ -188,7 +490,9 @@ class APIToken:
 
 ### 5.2 API Token认证（MCP服务）
 
-- **格式**: `ask_live_{64位随机hex}`
+- **格式**: `ask_live_{64字符十六进制串}`，总长度73字符
+  - 前缀: `ask_live_`（9字符）
+  - 随机部分: 32字节（256位）随机数，使用 `secrets.token_hex(32)` 生成64个十六进制字符
 - **存储**: 仅存储SHA256哈希值
 - **Header**: `Authorization: Bearer {api_token}`
 - **过期**: 可选设置过期时间
@@ -196,10 +500,150 @@ class APIToken:
 ### 5.3 Token生成示例
 
 ```python
-# API Token格式
-token = "ask_live_" + secrets.token_hex(32)
-# 示例: ask_live_a1b2c3d4e5f6...（共72字符）
+import secrets
+
+# API Token 生成
+prefix = "ask_live_"
+random_part = secrets.token_hex(32)  # 生成64个十六进制字符（32字节）
+token = prefix + random_part
+# 示例: ask_live_a1b2c3d4e5f67890...（共73字符：9 + 64）
+
+# Token 哈希存储
+import hashlib
+token_hash = hashlib.sha256(token.encode()).hexdigest()
 ```
+
+### 5.4 API Token 验证流程
+
+#### 完整验证流程
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                      MCP 请求验证流程                             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  1. 从请求头提取 Token                                            │
+│     Header: Authorization: Bearer ask_live_xxx...                │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  2. 验证 Token 格式                                               │
+│     - 检查前缀是否为 "ask_live_"                                   │
+│     - 检查总长度是否为 73 字符                                     │
+│     - 检查随机部分是否为有效的十六进制字符串                         │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  3. 计算 Token 哈希                                               │
+│     token_hash = SHA256(token)                                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  4. 数据库查询                                                    │
+│     SELECT * FROM api_tokens WHERE token_hash = ? AND is_active  │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  5. 检查 Token 状态                                               │
+│     - is_active == True ?                                        │
+│     - expires_at > now() ? (如果设置了过期时间)                    │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  6. 更新最后使用时间                                               │
+│     UPDATE api_tokens SET last_used_at = now()                   │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  7. 设置用户上下文                                                 │
+│     set_current_user_id(user.id)                                 │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  8. 返回用户信息，继续处理请求                                       │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### 实现代码示例
+
+```python
+# api/mcp/auth.py
+import hashlib
+import re
+from datetime import datetime, timezone
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+from mcp_agentskills.repositories.token import TokenRepository
+from mcp_agentskills.core.utils.user_context import set_current_user_id
+
+security = HTTPBearer()
+
+# Token 格式验证正则：64个十六进制字符（ask_live_ 前缀后的部分）
+API_TOKEN_PATTERN = re.compile(r'^[a-f0-9]{64}$', re.IGNORECASE)
+
+def get_current_user_from_api_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    token_repo: TokenRepository = Depends(),
+) -> User:
+    """从 API Token 获取当前用户"""
+    token = credentials.credentials
+    
+    # 1. 验证 Token 格式
+    if not token.startswith("ask_live_"):
+        raise HTTPException(status_code=401, detail="Invalid token format")
+    
+    if len(token) != 73:
+        raise HTTPException(status_code=401, detail="Invalid token length")
+    
+    # 1.1 验证随机部分是否为有效的十六进制字符串
+    random_part = token[9:]  # 去掉前缀 "ask_live_"
+    if not API_TOKEN_PATTERN.match(random_part):
+        raise HTTPException(status_code=401, detail="Invalid token format: random part must be hexadecimal")
+    
+    # 2. 计算 Token 哈希
+    token_hash = hashlib.sha256(token.encode()).hexdigest()
+    
+    # 3. 查询数据库
+    api_token = await token_repo.get_by_token_hash(token_hash)
+    if not api_token:
+        raise HTTPException(status_code=401, detail="Token not found")
+    
+    # 4. 检查状态
+    if not api_token.is_active:
+        raise HTTPException(status_code=401, detail="Token is revoked")
+    
+    if api_token.expires_at and api_token.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=401, detail="Token has expired")
+    
+    # 5. 更新最后使用时间
+    await token_repo.update_last_used(api_token.id)
+    
+    # 6. 设置用户上下文（重要：用于 MCP 工具的用户隔离）
+    set_current_user_id(str(api_token.user_id))
+    
+    # 7. 返回用户
+    return api_token.user
+```
+
+#### 错误响应
+
+| 错误码 | 描述 | HTTP 状态码 |
+|--------|------|------------|
+| `INVALID_TOKEN_FORMAT` | Token 格式不正确 | 401 |
+| `TOKEN_NOT_FOUND` | Token 不存在 | 401 |
+| `TOKEN_REVOKED` | Token 已被撤销 | 401 |
+| `TOKEN_EXPIRED` | Token 已过期 | 401 |
 
 ---
 
@@ -211,29 +655,99 @@ token = "ask_live_" + secrets.token_hex(32)
 
 1. 从上下文获取 `user_id`
 2. 根据用户ID构建Skill路径
-3. 保持向后兼容（无user_id时使用全局路径）
+3. 保持向后兼容（仅用于 stdio/SSE 模式，无用户认证时使用全局路径）
 
-### 6.2 LoadSkillOp 改造
+> **重要说明**: 向后兼容仅适用于 **stdio 模式** 或 **单用户 SSE 模式**。在 HTTP API 模式下，MCP 端点强制要求 API Token 认证，不允许无用户身份的访问。这是为了确保多用户环境下的数据隔离和安全性。
+
+### 6.2 并发安全机制
+
+> **重要**: FlowLLM 的 `C` 是全局上下文对象，在多用户并发场景下需要特殊处理以确保用户隔离的安全性。
+
+#### 实现方案
+
+使用 `contextvars` 实现请求级别的用户上下文隔离：
 
 ```python
+# core/utils/user_context.py
+from contextvars import ContextVar
+from typing import Optional
+from uuid import UUID
+
+# 定义请求级别的用户上下文变量
+_current_user_id: ContextVar[Optional[str]] = ContextVar("current_user_id", default=None)
+
+def set_current_user_id(user_id: Optional[str]) -> None:
+    """设置当前请求的用户ID"""
+    _current_user_id.set(user_id)
+
+def get_current_user_id() -> Optional[str]:
+    """获取当前请求的用户ID"""
+    return _current_user_id.get()
+```
+
+#### MCP 工具中的使用方式
+
+```python
+from mcp_agentskills.core.utils.user_context import get_current_user_id
+
 async def async_execute(self):
-    skill_name = self.input_dict["skill_name"]
-    user_id = C.service_config.metadata.get("user_id")
+    user_id = get_current_user_id()  # 从请求级上下文获取
     skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
     
     if user_id:
         skill_path = skill_dir / user_id / skill_name / "SKILL.md"
     else:
         skill_path = skill_dir / skill_name / "SKILL.md"
+```
+
+#### MCP 认证中间件中的注入
+
+```python
+# api/mcp/auth.py
+from mcp_agentskills.core.utils.user_context import set_current_user_id
+
+async def get_current_user_from_token(token: str) -> User:
+    """从 API Token 获取用户并设置上下文"""
+    user = await validate_api_token(token)
+    set_current_user_id(str(user.id))  # 设置请求级用户ID
+    return user
+```
+
+#### 为什么这样设计？
+
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| **contextvars** (推荐) | 线程安全、协程安全、无需修改 FlowLLM | 需要在中间件中显式设置 |
+| 修改 C.service_config | 简单直接 | 全局状态，并发不安全 |
+| 传递 user_id 参数 | 最安全 | 需要修改所有工具签名 |
+
+### 6.3 LoadSkillOp 改造
+
+```python
+from mcp_agentskills.core.utils.user_context import get_current_user_id
+
+async def async_execute(self):
+    skill_name = self.input_dict["skill_name"]
+    user_id = get_current_user_id()  # 使用请求级上下文
+    skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+    
+    if user_id:
+        # HTTP API 模式：使用用户私有目录
+        skill_path = skill_dir / user_id / skill_name / "SKILL.md"
+    else:
+        # stdio/SSE 单用户模式：使用全局目录（向后兼容）
+        skill_path = skill_dir / skill_name / "SKILL.md"
     
     # ... 其余逻辑不变
 ```
 
-### 6.3 LoadSkillMetadataOp 改造
+### 6.4 LoadSkillMetadataOp 改造
 
 ```python
+from mcp_agentskills.core.utils.user_context import get_current_user_id
+
 async def async_execute(self):
-    user_id = C.service_config.metadata.get("user_id")
+    user_id = get_current_user_id()  # 使用请求级上下文
     skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
     
     if user_id:
@@ -244,13 +758,15 @@ async def async_execute(self):
     # ... 其余逻辑不变
 ```
 
-### 6.4 ReadReferenceFileOp 改造
+### 6.5 ReadReferenceFileOp 改造
 
 ```python
+from mcp_agentskills.core.utils.user_context import get_current_user_id
+
 async def async_execute(self):
     skill_name = self.input_dict["skill_name"]
     file_name = self.input_dict["file_name"]
-    user_id = C.service_config.metadata.get("user_id")
+    user_id = get_current_user_id()  # 使用请求级上下文
     skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
     
     if user_id:
@@ -261,13 +777,15 @@ async def async_execute(self):
     # ... 其余逻辑不变
 ```
 
-### 6.5 RunShellCommandOp 改造
+### 6.6 RunShellCommandOp 改造
 
 ```python
+from mcp_agentskills.core.utils.user_context import get_current_user_id
+
 async def async_execute(self):
     skill_name = self.input_dict["skill_name"]
     command = self.input_dict["command"]
-    user_id = C.service_config.metadata.get("user_id")
+    user_id = get_current_user_id()  # 使用请求级上下文
     skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
     
     if user_id:
@@ -282,90 +800,235 @@ async def async_execute(self):
 
 ## 7. 项目结构
 
+> **说明**: 项目根目录为 `agentskills-mcp/`，Python 包名为 `mcp_agentskills`。
+> 
+> **注意**: 以下结构为改造后的目标结构。`core/security/`、`core/middleware/`、`models/`、`schemas/`、`repositories/`、`services/`、`api/`、`db/` 等目录为新增模块，将在改造过程中创建。现有 `core/tools/` 和 `core/utils/` 目录将保留并扩展。
+
+### 7.1 双模式架构
+
+项目同时支持两种运行模式：
+
+| 模式 | 入口 | 用途 | 传输方式 |
+|------|------|------|---------|
+| **FlowLLM 模式** | `main.py` (现有) | MCP 服务 | stdio/SSE |
+| **FastAPI 模式** | `api_app.py` (新增) | Web API + MCP | HTTP |
+
 ```
-mcp_agentskills/
-├── __init__.py
-├── main.py                      # FastAPI应用入口
-├── config/
+agentskills-mcp/                  # 项目根目录
+├── mcp_agentskills/              # Python 包目录
 │   ├── __init__.py
-│   ├── config_parser.py         # 配置解析器（保留）
-│   ├── default.yaml             # 默认配置（扩展）
-│   └── settings.py              # Pydantic Settings
-├── core/
-│   ├── __init__.py
-│   ├── security/
+│   ├── main.py                   # FlowLLM 应用入口（保留，用于 stdio/SSE）
+│   ├── api_app.py                # FastAPI 应用入口（新增，用于 HTTP API）
+│   ├── config/
 │   │   ├── __init__.py
-│   │   ├── jwt.py               # JWT工具
-│   │   ├── password.py          # 密码哈希
-│   │   └── token.py             # API Token生成
-│   ├── middleware/
+│   │   ├── config_parser.py      # 配置解析器（保留）
+│   │   ├── default.yaml          # 默认配置（扩展）
+│   │   └── settings.py           # Pydantic Settings
+│   ├── core/
 │   │   ├── __init__.py
-│   │   ├── auth.py              # 认证中间件
-│   │   └── rate_limit.py        # 限流中间件
-│   ├── tools/                   # MCP工具（改造）
+│   │   ├── security/
+│   │   │   ├── __init__.py
+│   │   │   ├── jwt.py            # JWT工具
+│   │   │   ├── password.py       # 密码哈希
+│   │   │   └── token.py          # API Token生成
+│   │   ├── middleware/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py           # 认证中间件
+│   │   │   └── rate_limit.py     # 限流中间件
+│   │   ├── tools/                # MCP工具（改造）
+│   │   │   ├── __init__.py
+│   │   │   ├── load_skill_metadata_op.py
+│   │   │   ├── load_skill_op.py
+│   │   │   ├── read_reference_file_op.py
+│   │   │   └── run_shell_command_op.py
+│   │   └── utils/
+│   │       ├── __init__.py
+│   │       ├── service_runner.py
+│   │       ├── user_context.py    # 用户上下文管理（并发安全）
+│   │       └── skill_storage.py  # Skill存储工具
+│   ├── models/
 │   │   ├── __init__.py
-│   │   ├── load_skill_metadata_op.py
-│   │   ├── load_skill_op.py
-│   │   ├── read_reference_file_op.py
-│   │   └── run_shell_command_op.py
-│   └── utils/
-│       ├── __init__.py
-│       ├── service_runner.py
-│       └── skill_storage.py     # Skill存储工具
-├── models/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── user.py
-│   ├── skill.py
-│   └── token.py
-├── schemas/
-│   ├── __init__.py
-│   ├── user.py
-│   ├── skill.py
-│   ├── token.py
-│   └── response.py
-├── repositories/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── user.py
-│   ├── skill.py
-│   └── token.py
-├── services/
-│   ├── __init__.py
-│   ├── auth.py
-│   ├── user.py
-│   ├── skill.py
-│   └── mcp.py
-├── api/
-│   ├── __init__.py
-│   ├── deps.py
-│   ├── router.py
-│   ├── v1/
+│   │   ├── base.py
+│   │   ├── user.py
+│   │   ├── skill.py
+│   │   └── token.py
+│   ├── schemas/
+│   │   ├── __init__.py
+│   │   ├── user.py
+│   │   ├── skill.py
+│   │   ├── token.py
+│   │   └── response.py
+│   ├── repositories/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── user.py
+│   │   ├── skill.py
+│   │   └── token.py
+│   ├── services/
 │   │   ├── __init__.py
 │   │   ├── auth.py
-│   │   ├── users.py
-│   │   ├── skills.py
-│   │   └── tokens.py
-│   └── mcp/
+│   │   ├── user.py
+│   │   ├── skill.py
+│   │   └── mcp.py
+│   ├── api/
+│   │   ├── __init__.py
+│   │   ├── deps.py
+│   │   ├── router.py
+│   │   ├── v1/
+│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── users.py
+│   │   │   ├── skills.py
+│   │   │   └── tokens.py
+│   │   └── mcp/
+│   │       ├── __init__.py
+│   │       ├── auth.py
+│   │       ├── http_handler.py
+│   │       └── sse_handler.py
+│   └── db/
 │       ├── __init__.py
-│       ├── auth.py
-│       ├── http_handler.py
-│       └── sse_handler.py
-└── db/
-    ├── __init__.py
-    ├── session.py
-    └── migrations/
+│       ├── session.py
+│       └── migrations/
+├── tests/
+├── docs/
+├── pyproject.toml
+└── README.md
+```
+
+### 7.2 启动方式
+
+```bash
+# FlowLLM 模式（stdio/SSE，无用户认证）
+python -m mcp_agentskills
+
+# FastAPI 模式（HTTP API，多用户认证）
+uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000
+```
+
+### 7.3 入口文件说明
+
+#### main.py（保留）
+
+```python
+# 现有 FlowLLM 应用入口，用于 stdio/SSE 模式
+# 无需修改，保持向后兼容
+
+from flowllm.core.application import Application
+
+class AgentSkillsMcpApp(Application):
+    # ... 现有代码保留
+```
+
+#### api_app.py（新增）
+
+```python
+# FastAPI 应用入口，用于 HTTP API 模式
+# 提供用户认证、Skill 管理、MCP 服务
+
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from mcp_agentskills.db.session import init_db
+from mcp_agentskills.api.router import api_router
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    yield
+
+def create_application() -> FastAPI:
+    app = FastAPI(lifespan=lifespan)
+    app.include_router(api_router, prefix="/api/v1")
+    return app
+
+app = create_application()
 ```
 
 ---
 
-## 8. 配置规范
+## 8. 依赖清单
 
-### 8.1 环境变量
+### 8.1 核心依赖
+
+| 依赖包 | 版本要求 | 用途 |
+|--------|---------|------|
+| `fastapi` | >=0.109.0 | Web 框架 |
+| `uvicorn[standard]` | >=0.27.0 | ASGI 服务器 |
+| `sqlalchemy[asyncio]` | >=2.0.0 | ORM |
+| `asyncpg` | >=0.29.0 | PostgreSQL 异步驱动 |
+| `alembic` | >=1.13.0 | 数据库迁移 |
+| `pydantic` | >=2.5.0 | 数据验证 |
+| `pydantic-settings` | >=2.1.0 | 配置管理 |
+| `python-jose[cryptography]` | >=3.3.0 | JWT 处理 |
+| `passlib[bcrypt]` | >=1.7.4 | 密码哈希 |
+| `python-multipart` | >=0.0.6 | 文件上传 |
+| `flowllm` | >=0.2.0.7 | MCP 框架 |
+| `loguru` | >=0.7.0 | 日志 |
+| `httpx` | >=0.26.0 | HTTP 客户端 |
+| `psutil` | >=5.9.0 | 系统监控 |
+
+### 8.2 开发依赖
+
+| 依赖包 | 版本要求 | 用途 |
+|--------|---------|------|
+| `pytest` | >=8.0.0 | 测试框架 |
+| `pytest-asyncio` | >=0.23.0 | 异步测试支持 |
+| `pytest-cov` | >=4.1.0 | 测试覆盖率 |
+| `aiosqlite` | >=0.19.0 | SQLite 异步驱动（测试用） |
+| `pre-commit` | >=3.6.0 | Git 钩子 |
+| `ruff` | >=0.1.0 | 代码格式化 |
+| `mypy` | >=1.8.0 | 类型检查 |
+
+### 8.3 pyproject.toml 示例
+
+```toml
+[project]
+name = "mcp-agentskills"
+version = "1.0.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    "fastapi>=0.109.0",
+    "uvicorn[standard]>=0.27.0",
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    "python-multipart>=0.0.6",
+    "flowllm>=0.2.0.7",
+    "loguru>=0.7.0",
+    "httpx>=0.26.0",
+    "psutil>=5.9.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "aiosqlite>=0.19.0",
+    "pre-commit>=3.6.0",
+    "ruff>=0.1.0",
+    "mypy>=1.8.0",
+]
+```
+
+---
+
+## 9. 配置规范
+
+### 9.1 环境变量
 
 ```env
 # 数据库
 DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/agentskills
+DATABASE_POOL_SIZE=20
+DATABASE_MAX_OVERFLOW=10
+DATABASE_POOL_TIMEOUT=30
+DATABASE_POOL_RECYCLE=1800
 
 # JWT
 SECRET_KEY=your-secret-key-min-32-chars
@@ -377,54 +1040,355 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 DEBUG=false
 CORS_ORIGINS=["http://localhost:3000"]
 
+# 日志
+LOG_LEVEL=INFO
+LOG_FORMAT=json
+LOG_FILE=/var/log/agentskills/app.log
+
 # 存储
 SKILL_STORAGE_PATH=/data/skills
+
+# 限流配置
+RATE_LIMIT_REQUESTS=100
+RATE_LIMIT_WINDOW=60
 
 # LLM
 FLOW_LLM_API_KEY=your-api-key
 FLOW_LLM_BASE_URL=https://api.openai.com/v1
 ```
 
-### 8.2 Settings类
+### 9.2 Settings类
 
 ```python
+from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator, model_validator, ValidationInfo
+
+
 class Settings(BaseSettings):
+    # 数据库
     DATABASE_URL: str
+    DATABASE_POOL_SIZE: int = 20
+    DATABASE_MAX_OVERFLOW: int = 10
+    DATABASE_POOL_TIMEOUT: int = 30
+    DATABASE_POOL_RECYCLE: int = 1800
+    
+    # JWT
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    # 应用
     DEBUG: bool = False
-    CORS_ORIGINS: List[str] = ["*"]
+    CORS_ORIGINS: List[str] = []
+    
+    # 时区配置（用于统一处理时间戳）
+    # 建议使用 UTC 时区，确保 datetime.now(timezone.utc) 调用的一致性
+    TIMEZONE: str = "UTC"
+    
+    # 日志
+    LOG_LEVEL: str = "INFO"
+    LOG_FORMAT: str = "json"
+    LOG_FILE: str = "/var/log/agentskills/app.log"
+    
+    # 存储
     SKILL_STORAGE_PATH: str = "/data/skills"
+    
+    # 限流配置
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW: int = 60
+    
+    # LLM
     FLOW_LLM_API_KEY: str = ""
     FLOW_LLM_BASE_URL: str = ""
+    
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.split(",")]
+        return v
+    
+    @model_validator(mode="after")
+    def validate_cors_origins(self):
+        # 生产环境 CORS 安全配置
+        if not self.DEBUG and (not self.CORS_ORIGINS or "*" in self.CORS_ORIGINS):
+            raise ValueError(
+                "生产环境 CORS_ORIGINS 必须显式配置且不能包含通配符 '*'"
+            )
+        return self
+    
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def validate_secret_key(cls, v):
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY 长度必须至少 32 字符")
+        return v
+    
+    @field_validator("DATABASE_POOL_SIZE", "DATABASE_MAX_OVERFLOW")
+    @classmethod
+    def validate_pool_settings(cls, v, info: ValidationInfo):
+        field_name = info.field_name
+        if v < 1:
+            raise ValueError(f"{field_name} 必须至少为 1")
+        if v > 100:
+            raise ValueError(f"{field_name} 不能超过 100")
+        return v
+    
+    @field_validator("DATABASE_POOL_TIMEOUT", "DATABASE_POOL_RECYCLE")
+    @classmethod
+    def validate_timeout_settings(cls, v, info: ValidationInfo):
+        field_name = info.field_name
+        if v < 1:
+            raise ValueError(f"{field_name} 必须至少为 1 秒")
+        if v > 3600:
+            raise ValueError(f"{field_name} 不能超过 3600 秒")
+        return v
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=True
+    )
+
+
+settings = Settings()
+```
+
+# 数据库连接池配置示例（db/session.py）
+"""
+from typing import AsyncGenerator
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+
+# 创建异步引擎，使用连接池配置
+engine = create_async_engine(
+    settings.DATABASE_URL,
+    pool_size=settings.DATABASE_POOL_SIZE,          # 连接池大小
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,    # 超出池大小的额外连接数
+    pool_timeout=settings.DATABASE_POOL_TIMEOUT,    # 获取连接的超时时间（秒）
+    pool_recycle=settings.DATABASE_POOL_RECYCLE,    # 连接回收时间（秒）
+    pool_pre_ping=True,                             # 使用前检测连接是否有效
+    echo=settings.DEBUG,                            # 调试模式下打印SQL
+)
+
+# 创建异步会话工厂
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    class_=AsyncSession,
+    expire_on_commit=False,
+    autoflush=False,
+)
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    '''获取数据库会话的依赖函数'''
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+async def init_db():
+    '''初始化数据库（创建所有表）'''
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+"""
 ```
 
 ---
 
-## 9. 安全要求
+## 10. 安全要求
 
-### 9.1 密码安全
+### 10.1 密码安全
 
 - 使用bcrypt进行密码哈希
 - 最小密码长度8位
 - 建议包含大小写字母、数字、特殊字符
 
-### 9.2 Token安全
+### 10.2 Token安全
 
 - API Token仅在创建时显示一次
 - 存储SHA256哈希值而非明文
 - 支持Token过期和撤销
 
-### 9.3 文件上传安全
+### 10.3 文件上传安全
 
-- 验证文件类型
-- 限制单文件大小（建议10MB）
-- 限制总上传大小（建议100MB）
-- 防止路径遍历攻击
+- **文件类型验证**: 仅允许以下扩展名
+  - `.md` - Markdown 文档
+  - `.py` - Python 脚本
+  - `.js` - JavaScript 脚本
+  - `.sh` - Shell 脚本
+  - `.txt` - 纯文本
+  - `.json` - JSON 文件
+  - `.yaml`, `.yml` - YAML 配置文件
+- **大小限制**:
+  - 单文件大小: 10MB
+  - 总上传大小: 100MB
+  - 单个 Skill 文件总数: 50个
+- **路径安全**:
+  - 禁止 `..` 路径遍历
+  - 禁止绝对路径
+  - 文件名仅允许字母、数字、下划线、连字符和点
 
-### 9.4 API安全
+#### 路径遍历防护实现
+
+```python
+# core/utils/skill_storage.py
+import re
+from pathlib import Path
+from typing import Optional
+
+# 允许的文件扩展名
+ALLOWED_EXTENSIONS = {".md", ".py", ".js", ".sh", ".txt", ".json", ".yaml", ".yml"}
+
+# 文件名安全正则：仅允许字母、数字、下划线、连字符和点
+SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
+
+
+def validate_file_path(file_path: str) -> tuple[bool, str]:
+    """验证文件路径安全性
+    
+    Args:
+        file_path: 待验证的文件路径
+        
+    Returns:
+        tuple[bool, str]: (是否安全, 错误信息)
+    """
+    # 1. 检查空路径
+    if not file_path or not file_path.strip():
+        return False, "File path cannot be empty"
+    
+    # 2. 检查路径遍历攻击
+    if ".." in file_path:
+        return False, "Path traversal detected: '..' is not allowed"
+    
+    # 3. 检查绝对路径
+    if file_path.startswith("/") or (len(file_path) > 1 and file_path[1] == ":"):
+        return False, "Absolute paths are not allowed"
+    
+    # 4. 检查路径分隔符（仅允许正斜杠）
+    if "\\" in file_path:
+        return False, "Backslashes are not allowed in file path"
+    
+    # 5. 检查每个路径组件
+    parts = file_path.split("/")
+    for part in parts:
+        if not part:
+            continue
+        if not SAFE_FILENAME_PATTERN.match(part):
+            return False, f"Invalid filename component: '{part}'"
+    
+    # 6. 检查文件扩展名
+    ext = Path(file_path).suffix.lower()
+    if ext and ext not in ALLOWED_EXTENSIONS:
+        return False, f"File extension '{ext}' is not allowed"
+    
+    return True, "OK"
+
+
+def get_safe_skill_path(base_dir: Path, user_id: str, skill_name: str, file_path: str) -> Optional[Path]:
+    """获取安全的 Skill 文件路径
+    
+    Args:
+        base_dir: 基础目录
+        user_id: 用户 ID
+        skill_name: Skill 名称
+        file_path: 相对文件路径
+        
+    Returns:
+        Optional[Path]: 安全的完整路径，如果验证失败则返回 None
+    """
+    # 验证文件路径
+    is_valid, error = validate_file_path(file_path)
+    if not is_valid:
+        return None
+    
+    # 验证 skill_name
+    is_valid, _ = validate_file_path(skill_name)
+    if not is_valid:
+        return None
+    
+    # 构建完整路径
+    full_path = base_dir / user_id / skill_name / file_path
+    
+    # 解析并验证最终路径仍在允许的目录内
+    try:
+        full_path = full_path.resolve()
+        base_path = (base_dir / user_id).resolve()
+        
+        if not str(full_path).startswith(str(base_path)):
+            return None  # 路径逃逸
+            
+        return full_path
+    except Exception:
+        return None
+
+
+def validate_filename(filename: str) -> tuple[bool, str]:
+    """验证文件名安全性
+    
+    Args:
+        filename: 待验证的文件名
+        
+    Returns:
+        tuple[bool, str]: (是否安全, 错误信息)
+    """
+    if not filename or not filename.strip():
+        return False, "Filename cannot be empty"
+    
+    if len(filename) > 255:
+        return False, "Filename too long (max 255 characters)"
+    
+    if not SAFE_FILENAME_PATTERN.match(filename):
+        return False, "Filename contains invalid characters"
+    
+    ext = Path(filename).suffix.lower()
+    if ext and ext not in ALLOWED_EXTENSIONS:
+        return False, f"File extension '{ext}' is not allowed"
+    
+    return True, "OK"
+```
+
+#### 使用示例
+
+```python
+# 在 API 端点中使用
+from mcp_agentskills.core.utils.skill_storage import validate_file_path, get_safe_skill_path
+
+@app.post("/api/v1/skills/upload")
+async def upload_skill_file(
+    skill_id: str,
+    file: UploadFile,
+    current_user: User = Depends(get_current_user),
+):
+    # 验证文件名
+    is_valid, error = validate_filename(file.filename)
+    if not is_valid:
+        raise HTTPException(status_code=400, detail=error)
+    
+    # 获取安全路径
+    safe_path = get_safe_skill_path(
+        base_dir=Path(settings.SKILL_STORAGE_PATH),
+        user_id=str(current_user.id),
+        skill_name=skill_id,
+        file_path=file.filename,
+    )
+    
+    if not safe_path:
+        raise HTTPException(status_code=400, detail="Invalid file path")
+    
+    # 写入文件
+    safe_path.parent.mkdir(parents=True, exist_ok=True)
+    content = await file.read()
+    safe_path.write_bytes(content)
+```
+
+### 10.4 API安全
 
 - 所有用户API需要JWT认证
 - MCP API需要API Token认证
@@ -432,9 +1396,9 @@ class Settings(BaseSettings):
 
 ---
 
-## 10. 错误处理
+## 11. 错误处理
 
-### 10.1 标准错误响应格式
+### 11.1 标准错误响应格式
 
 ```json
 {
@@ -444,7 +1408,7 @@ class Settings(BaseSettings):
 }
 ```
 
-### 10.2 HTTP状态码规范
+### 11.2 HTTP状态码规范
 
 | 状态码 | 场景 |
 |--------|------|
@@ -461,41 +1425,135 @@ class Settings(BaseSettings):
 
 ---
 
-## 11. 测试要求
+## 12. 测试要求
 
-### 11.1 测试覆盖率
+### 12.1 测试覆盖率
 
 - 单元测试覆盖率 >= 80%
 - 核心业务逻辑覆盖率 >= 90%
 
-### 11.2 测试类型
+### 12.2 测试类型
 
 - 单元测试：Services、Repositories
 - 集成测试：API端点
 - E2E测试：完整用户流程
 
-### 11.3 测试数据库
+### 12.3 测试数据库
 
 使用内存SQLite进行测试：
 ```python
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 ```
 
+> **兼容性注意事项**: PostgreSQL 和 SQLite 在某些 SQL 语法上有差异：
+> - **UUID 类型**: PostgreSQL 原生支持 UUID 类型，SQLite 使用 TEXT 存储。SQLAlchemy 会自动处理，但原生 SQL 需要注意。
+> - **JSON 操作**: PostgreSQL 支持丰富的 JSON 操作符，SQLite 支持有限。
+> - **自增主键**: PostgreSQL 使用 SERIAL/IDENTITY，SQLite 使用 AUTOINCREMENT。
+> - **布尔类型**: PostgreSQL 有原生 BOOLEAN，SQLite 使用 0/1 整数。
+>
+> **建议**:
+> - 优先使用 SQLAlchemy ORM 方法，避免原生 SQL
+> - 如需使用 PostgreSQL 特有特性，建议在测试环境中使用 `pytest-postgresql` 启动真实 PostgreSQL 实例
+> - 或者在代码中使用条件判断兼容两种数据库
+
 ---
 
-## 12. 部署要求
+## 13. 部署要求
 
-### 12.1 Docker支持
+### 13.1 Docker支持
 
 - 提供Dockerfile
 - 提供docker-compose.yml（包含PostgreSQL）
 
-### 12.2 数据库迁移
+### 13.2 数据库迁移
 
 - 使用Alembic进行数据库迁移
 - 提供初始化迁移脚本
 
-### 12.3 健康检查
+#### Alembic 异步配置
+
+由于使用 SQLAlchemy 2.0 + asyncpg，需要特殊配置异步支持：
+
+**env.py 配置示例**:
+
+```python
+import asyncio
+from logging.config import fileConfig
+
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
+
+from mcp_agentskills.db.session import Base
+from mcp_agentskills.config.settings import settings
+
+config = context.config
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+
+def run_migrations_offline() -> None:
+    url = config.get_main_option("sqlalchemy.url")
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def do_run_migrations(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_async_migrations() -> None:
+    connectable = async_engine_from_config(
+        config.get_section(config.config_ini_section, {}),
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+    await connectable.dispose()
+
+
+def run_migrations_online() -> None:
+    asyncio.run(run_async_migrations())
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+```
+
+**迁移命令**:
+
+```bash
+# 初始化 Alembic（如果尚未初始化）
+alembic init mcp_agentskills/db/migrations
+
+# 创建新迁移
+alembic revision --autogenerate -m "description"
+
+# 执行迁移
+alembic upgrade head
+
+# 回滚迁移
+alembic downgrade -1
+```
+
+### 13.3 健康检查
 
 - 提供 `/health` 端点
 - 检查数据库连接状态

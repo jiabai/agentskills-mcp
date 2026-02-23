@@ -85,7 +85,7 @@
 | Web框架 | FastAPI | >=0.109.0 |
 | ORM | SQLAlchemy 2.0 | >=2.0.0 |
 | 数据库 | PostgreSQL | >=14.0 |
-| 认证 | python-jose + passlib | 最新版 |
+| 认证 | PyJWT + passlib | 最新版 |
 | 文件存储 | 本地文件系统 | - |
 | MCP框架 | FlowLLM | >=0.2.0.7 |
 | 异步支持 | asyncio + asyncpg | 最新版 |
@@ -163,6 +163,9 @@ class User(Base):
     __tablename__ = "users"
     
     # uuid4 是 callable，SQLAlchemy 会在插入时自动调用生成 UUID
+    # 建议生产环境使用数据库端生成 UUID (PostgreSQL gen_random_uuid())
+    # 注意：SQLite 测试环境不支持 gen_random_uuid()，需在 conftest.py 中处理或回退到客户端生成
+    # 这里为了兼容性，代码示例保留 client-side default=uuid4，但建议在生产环境迁移中使用 server_default
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
@@ -781,12 +784,18 @@ async def async_execute(self):
 
 ```python
 from mcp_agentskills.core.utils.user_context import get_current_user_id
+from mcp_agentskills.core.utils.command_security import validate_command
 
 async def async_execute(self):
     skill_name = self.input_dict["skill_name"]
     command = self.input_dict["command"]
     user_id = get_current_user_id()  # 使用请求级上下文
     skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+    
+    # 安全检查：验证命令是否在白名单中
+    is_valid, error_msg = validate_command(command)
+    if not is_valid:
+        return f"Error: Command execution blocked. {error_msg}"
     
     if user_id:
         work_dir = skill_dir / user_id / skill_name
@@ -959,7 +968,7 @@ app = create_application()
 | `alembic` | >=1.13.0 | 数据库迁移 |
 | `pydantic` | >=2.5.0 | 数据验证 |
 | `pydantic-settings` | >=2.1.0 | 配置管理 |
-| `python-jose[cryptography]` | >=3.3.0 | JWT 处理 |
+| `PyJWT` | >=2.8.0 | JWT 处理 |
 | `passlib[bcrypt]` | >=1.7.4 | 密码哈希 |
 | `python-multipart` | >=0.0.6 | 文件上传 |
 | `flowllm` | >=0.2.0.7 | MCP 框架 |
@@ -995,7 +1004,7 @@ dependencies = [
     "alembic>=1.13.0",
     "pydantic>=2.5.0",
     "pydantic-settings>=2.1.0",
-    "python-jose[cryptography]>=3.3.0",
+    "PyJWT>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.6",
     "flowllm>=0.2.0.7",
@@ -1453,6 +1462,7 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 >
 > **建议**:
 > - 优先使用 SQLAlchemy ORM 方法，避免原生 SQL
+> - 生产环境迁移脚本应使用 server_default=text("gen_random_uuid()") (PostgreSQL)，而测试环境 SQLite 不支持此函数，需在 Alembic 迁移脚本或 conftest.py 中做兼容处理
 > - 如需使用 PostgreSQL 特有特性，建议在测试环境中使用 `pytest-postgresql` 启动真实 PostgreSQL 实例
 > - 或者在代码中使用条件判断兼容两种数据库
 

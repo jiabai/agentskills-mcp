@@ -1,6 +1,8 @@
 # Tool Documentation
 
-> **当前版本**: v2.0（多用户版本）
+> **目标版本规范**: v2.0（待实现的多用户版本）
+>
+> **⚠️ 注意**: 本文档描述的是重构后的**目标行为**，当前代码库尚处于 v1.0 单用户状态。
 >
 > 本文档描述支持用户隔离的 MCP 工具接口。与单用户版本相比，主要区别在于支持用户隔离的 Skill 路径。
 
@@ -210,6 +212,8 @@ This tool executes shell commands and can automatically detect and install depen
 
 **多用户版本**: 在用户私有的Skill目录中执行命令。
 
+> **⚠️ 安全警告**: 出于安全考虑，该工具在多用户环境下仅允许执行**白名单内的安全命令**（如 `python`, `node`, `bash` 等），且严禁包含危险操作（如 `rm -rf`, `sudo` 等）。任何未授权的命令执行请求都将被拒绝。详见 [安全规范](./project-spec.md#311-runshellcommandop-安全增强)。
+
 ### Key Operation Flow
 
 - Extract skill_name and command from input
@@ -229,11 +233,17 @@ This tool executes shell commands and can automatically detect and install depen
 **多用户版本内部逻辑**:
 ```python
 from mcp_agentskills.core.utils.user_context import get_current_user_id
+from mcp_agentskills.core.utils.command_security import validate_command
 
 skill_name = self.input_dict["skill_name"]
 command = self.input_dict["command"]
 user_id = get_current_user_id()  # 从请求级上下文获取
 skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+
+# 安全检查
+is_valid, error_msg = validate_command(command)
+if not is_valid:
+    return f"Error: Command execution blocked. {error_msg}"
 
 if user_id:
     work_dir = skill_dir / user_id / skill_name

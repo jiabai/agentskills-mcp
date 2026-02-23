@@ -11,9 +11,10 @@
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
 | T1.1.1 | 创建配置模块 | 创建 `config/settings.py`，定义 Pydantic Settings | 无 | ⬜ |
-| T1.1.2 | 更新依赖配置 | 更新 `pyproject.toml`，添加新依赖 | T1.1.1 | ⬜ |
+| T1.1.2 | 更新依赖配置 | 更新 `pyproject.toml`，添加新依赖 (使用 PyJWT) | T1.1.1 | ⬜ |
 | T1.1.3 | 创建环境变量模板 | 创建 `.env.example` 文件 | T1.1.1 | ⬜ |
 | T1.1.4 | 扩展 default.yaml | 添加用户隔离相关配置 | T1.1.1 | ⬜ |
+| T1.1.5 | 创建辅助脚本 | 创建 `scripts/checklist_stats.py` | 无 | ✅ |
 
 ### 1.2 数据库层
 

@@ -498,6 +498,7 @@ find /backup -name "agentskills_*.sql" -mtime +7 -delete
 
 ```powershell
 # 手动备份
+# 注意：请确保 pg_dump.exe 所在目录（如 C:\Program Files\PostgreSQL\16\bin）已添加到系统 PATH
 $backupPath = "C:\backup\agentskills_$(Get-Date -Format 'yyyyMMdd').sql"
 pg_dump agentskills > $backupPath
 

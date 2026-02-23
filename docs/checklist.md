@@ -46,7 +46,7 @@
   - [ ] FastAPI >= 0.109.0
   - [ ] SQLAlchemy[asyncio] >= 2.0.0
   - [ ] asyncpg >= 0.29.0
-  - [ ] python-jose[cryptography]
+  - [ ] PyJWT
   - [ ] passlib[bcrypt]
   - [ ] pydantic-settings
   - [ ] python-multipart
@@ -81,6 +81,7 @@
 - [ ] 使用内存 SQLite (`sqlite+aiosqlite:///:memory:`) 进行单元测试
 - [ ] 测试配置与生产配置分离（通过环境变量或配置项区分）
 - [ ] 确保 SQLite 测试与 PostgreSQL 生产环境的 SQL 语法兼容性
+- [ ] 确保生产环境迁移脚本使用 server_default=text("gen_random_uuid()") (PostgreSQL) 而非仅依赖客户端生成
 
 > **说明**: 项目同时支持 PostgreSQL（生产环境）和 SQLite（测试环境）。测试环境使用 SQLite 是为了简化测试执行，无需启动外部数据库服务。详见 [project-spec.md](./project-spec.md) 和 [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md)。
 
@@ -198,7 +199,7 @@
 ### 4.2 JWT 认证
 
 - [ ] `core/security/jwt.py` 文件存在
-- [ ] `create_access_token()` 函数正确实现
+- [ ] `create_access_token()` 函数正确实现 (使用 PyJWT)
 - [ ] `create_refresh_token()` 函数正确实现
 - [ ] `decode_token()` 函数正确实现
 - [ ] Token 类型区分（access/refresh）

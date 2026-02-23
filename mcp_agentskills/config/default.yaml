@@ -1,6 +1,9 @@
 backend: mcp
 thread_pool_max_workers: 128
 
+metadata:
+  skill_dir: ./skills
+
 mcp:
   transport: stdio
   host: "0.0.0.0"

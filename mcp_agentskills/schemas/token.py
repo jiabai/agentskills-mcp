@@ -1,0 +1,20 @@
+from datetime import datetime
+
+from pydantic import BaseModel, Field
+
+
+class TokenCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    expires_at: datetime | None = None
+
+
+class TokenResponse(BaseModel):
+    id: str
+    name: str
+    token: str | None = None
+    is_active: bool
+    expires_at: datetime | None = None
+    last_used_at: datetime | None = None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

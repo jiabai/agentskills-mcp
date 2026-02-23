@@ -18,6 +18,8 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.utils.command_whitelist import validate_command
+from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
 class RunShellCommandOp(BaseAsyncToolOp):
@@ -145,7 +147,14 @@ class RunShellCommandOp(BaseAsyncToolOp):
         command: str = self.input_dict["command"]
 
         skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+        user_id = get_current_user_id()
+        work_dir = skill_dir / user_id / skill_name if user_id else skill_dir / skill_name
         logger.info(f"🔧 run shell command: skill_name={skill_name} skill_dir={skill_dir} command={command}")
+
+        is_valid, error_msg = validate_command(command)
+        if not is_valid:
+            self.set_output(f"Error: Command execution blocked. {error_msg}")
+            return
 
         # Auto-install dependencies for Python scripts if pipreqs is available
         # This helps ensure that Python scripts have their required dependencies
@@ -154,7 +163,7 @@ class RunShellCommandOp(BaseAsyncToolOp):
             if "py" in command:
                 pipreqs_available = shutil.which("pipreqs") is not None
                 if pipreqs_available:
-                    install_cmd = f"cd {skill_dir}/{skill_name} && pipreqs . --force && pip install -r requirements.txt"
+                    install_cmd = f"cd {work_dir} && pipreqs . --force && pip install -r requirements.txt"
                     proc = await asyncio.create_subprocess_shell(
                         install_cmd,
                         stdout=asyncio.subprocess.PIPE,
@@ -169,7 +178,7 @@ class RunShellCommandOp(BaseAsyncToolOp):
                     logger.info("❗️ pipreqs not found, skipping dependency auto-install.")
 
         proc = await asyncio.create_subprocess_shell(
-            command,
+            f"cd {work_dir} && {command}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=os.environ.copy(),

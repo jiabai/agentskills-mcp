@@ -18,7 +18,6 @@ def count_checklist_items(content: str) -> dict:
     sections = re.split(r'##\s+\d+\.\s+', content)[1:]
     
     for i, section in enumerate(sections):
-        lines = section.split('\n')
         module_name = modules[i] if i < len(modules) else f"模块{i+1}"
         
         checked = len(re.findall(r'- \[x\]', section, re.IGNORECASE))

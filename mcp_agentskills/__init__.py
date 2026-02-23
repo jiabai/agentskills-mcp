@@ -10,21 +10,30 @@ configuration and logging with this application.
 """
 
 import os
+from typing import TYPE_CHECKING
 
 # Hint FlowLLM about the logical application name. This is used by the
 # framework to locate configuration files and to tag logs/telemetry.
 os.environ["FLOW_APP_NAME"] = "AgentSkillsMCP"
 
-from . import core
-from . import config
+if TYPE_CHECKING:
+    from mcp_agentskills.config.config_parser import ConfigParser
+    from mcp_agentskills.main import AgentSkillsMcpApp
 
-from .main import AgentSkillsMcpApp
 
-__all__ = [
-    "core",
-    "config",
-    "AgentSkillsMcpApp",
-]
+def __getattr__(name: str):
+    if name == "AgentSkillsMcpApp":
+        from mcp_agentskills.main import AgentSkillsMcpApp
+
+        return AgentSkillsMcpApp
+    if name == "ConfigParser":
+        from mcp_agentskills.config.config_parser import ConfigParser
+
+        return ConfigParser
+    raise AttributeError(name)
+
+
+__all__ = ["AgentSkillsMcpApp", "ConfigParser"]
 
 # Library version. Keep in sync with the project metadata.
 __version__ = "0.1.2"

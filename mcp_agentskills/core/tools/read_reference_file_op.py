@@ -14,6 +14,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
 class ReadReferenceFileOp(BaseAsyncToolOp):
@@ -114,12 +115,15 @@ class ReadReferenceFileOp(BaseAsyncToolOp):
         file_name = self.input_dict["file_name"]
         # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
         skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+        user_id = get_current_user_id()
         logger.info(
             f"🔧 Tool called: read_reference_file(skill_name='{skill_name}', file_name='{file_name}') "
             f"with skill_dir={skill_dir}",
         )
 
-        file_path = skill_dir / skill_name / file_name
+        file_path = (
+            skill_dir / user_id / skill_name / file_name if user_id else skill_dir / skill_name / file_name
+        )
         if not file_path.exists():
             content = f"File '{file_name}' not found in skill '{skill_name}'"
             logger.exception(content)

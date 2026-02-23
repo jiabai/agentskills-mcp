@@ -15,6 +15,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
 class LoadSkillOp(BaseAsyncToolOp):
@@ -110,10 +111,12 @@ class LoadSkillOp(BaseAsyncToolOp):
         # This dictionary should be populated by LoadSkillMetadataOp
         # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
         skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+        user_id = get_current_user_id()
         logger.info(f"🔧 Tool called: load_skill(skill_name='{skill_name}') with skill_dir={skill_dir}")
 
-        # Construct the path to the SKILL.md file
-        skill_path = skill_dir / skill_name / "SKILL.md"
+        skill_path = (
+            skill_dir / user_id / skill_name / "SKILL.md" if user_id else skill_dir / skill_name / "SKILL.md"
+        )
 
         # Check if the SKILL.md file exists
         if not skill_path.exists():

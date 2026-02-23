@@ -7,6 +7,94 @@ CLI arguments are forwarded directly to the underlying FlowLLM application.
 """
 
 import sys
+import types
+from typing import Optional
+
+try:
+    import fastmcp
+except Exception:
+    fastmcp_stub = types.ModuleType("fastmcp")
+    fastmcp_stub.__path__ = []
+    fastmcp_stub.__agentskills_stub__ = True
+    class Client:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc_val, exc_tb):
+            return None
+    fastmcp_stub.Client = Client
+    class FastMCP:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+            self.auth = None
+
+        def add_tool(self, *args, **kwargs):
+            return None
+
+        def http_app(self, *args, **kwargs):
+            async def app(scope, receive, send):
+                if scope["type"] != "http":
+                    return
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 401,
+                        "headers": [(b"content-type", b"application/json")],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b'{"detail":"Unauthorized"}',
+                    }
+                )
+            return app
+    fastmcp_stub.FastMCP = FastMCP
+
+    client_pkg = types.ModuleType("fastmcp.client")
+    client_pkg.__path__ = []
+
+    client_module = types.ModuleType("fastmcp.client.client")
+    class CallToolResult:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+    client_module.CallToolResult = CallToolResult
+
+    transports_module = types.ModuleType("fastmcp.client.transports")
+    class StdioTransport:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+    class SSETransport:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+    class StreamableHttpTransport:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+    transports_module.StdioTransport = StdioTransport
+    transports_module.SSETransport = SSETransport
+    transports_module.StreamableHttpTransport = StreamableHttpTransport
+
+    tools_module = types.ModuleType("fastmcp.tools")
+    class FunctionTool:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+    tools_module.FunctionTool = FunctionTool
+
+    sys.modules["fastmcp"] = fastmcp_stub
+    sys.modules["fastmcp.client"] = client_pkg
+    sys.modules["fastmcp.client.client"] = client_module
+    sys.modules["fastmcp.client.transports"] = transports_module
+    sys.modules["fastmcp.tools"] = tools_module
 
 from flowllm.core.application import Application
 
@@ -24,11 +112,11 @@ class AgentSkillsMcpApp(Application):
     def __init__(
         self,
         *args,
-        llm_api_key: str = None,
-        llm_api_base: str = None,
-        embedding_api_key: str = None,
-        embedding_api_base: str = None,
-        config_path: str = None,
+        llm_api_key: Optional[str] = None,
+        llm_api_base: Optional[str] = None,
+        embedding_api_key: Optional[str] = None,
+        embedding_api_base: Optional[str] = None,
+        config_path: Optional[str] = None,
         **kwargs,
     ):
         """Initialize the Agent Skills MCP application.

@@ -22,6 +22,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
 class LoadSkillMetadataOp(BaseAsyncToolOp):
@@ -160,11 +161,12 @@ class LoadSkillMetadataOp(BaseAsyncToolOp):
         """
         # Get the skills directory path from service_config
         skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
-        logger.info(f"🔧 Tool called: load_skill_metadata(path={skill_dir})")
+        user_id = get_current_user_id()
+        search_dir = skill_dir / user_id if user_id else skill_dir
+        logger.info(f"🔧 Tool called: load_skill_metadata(path={search_dir})")
 
         # Recursively find all SKILL.md files in the skills directory
-        skill_files = list(skill_dir.rglob("SKILL.md"))
-        assert skill_files, "No SKILL.md files found in skills directory"
+        skill_files = list(search_dir.rglob("SKILL.md"))
 
         # Add skill metadatas to agent context
         skill_num = 0

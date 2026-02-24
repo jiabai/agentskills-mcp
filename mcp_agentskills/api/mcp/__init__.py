@@ -26,7 +26,7 @@ _init_error: Exception | None = None
 
 
 def _build_fallback_app() -> Starlette:
-    async def handler(request):
+    async def handler(_request):
         return JSONResponse({"detail": "Unauthorized"}, status_code=401)
 
     return Starlette(

@@ -4,24 +4,32 @@ from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.token import TokenRepository
 from mcp_agentskills.repositories.user import UserRepository
-from mcp_agentskills.schemas.token import TokenCreate, TokenResponse
+from mcp_agentskills.schemas.token import TokenCreate, TokenListResponse, TokenResponse
 from mcp_agentskills.services.token import TokenService
 
 
 router = APIRouter()
 
 
-@router.get("", response_model=list[TokenResponse])
+@router.get("", response_model=TokenListResponse, response_model_exclude_none=True)
+@router.get("/", response_model=TokenListResponse, response_model_exclude_none=True)
 async def list_tokens(
+    skip: int = 0,
+    limit: int = 100,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = TokenService(TokenRepository(session), UserRepository(session))
-    tokens = await service.list_tokens(current_user)
-    return [TokenResponse.model_validate(token) for token in tokens]
+    tokens = await service.token_repo.list_by_user(current_user.id, skip=skip, limit=limit)
+    total = await service.token_repo.count_by_user(current_user.id)
+    return TokenListResponse(
+        items=[TokenResponse.model_validate(token) for token in tokens],
+        total=total,
+    )
 
 
 @router.post("", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def create_token(
     payload: TokenCreate,
     current_user=Depends(get_current_active_user),

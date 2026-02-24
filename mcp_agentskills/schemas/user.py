@@ -6,7 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 class UserCreate(BaseModel):
     email: EmailStr
     username: str = Field(min_length=3, max_length=64)
-    password: str = Field(min_length=6)
+    password: str = Field(min_length=8)
 
 
 class UserLogin(BaseModel):
@@ -21,7 +21,7 @@ class UserUpdate(BaseModel):
 
 class UserPasswordUpdate(BaseModel):
     current_password: str
-    new_password: str = Field(min_length=6)
+    new_password: str = Field(min_length=8)
 
 
 class UserDelete(BaseModel):
@@ -38,3 +38,7 @@ class UserResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class UserInDB(UserResponse):
+    hashed_password: str

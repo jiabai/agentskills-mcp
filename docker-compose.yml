@@ -1,0 +1,28 @@
+services:
+  db:
+    image: postgres:14
+    environment:
+      POSTGRES_USER: agentskills
+      POSTGRES_PASSWORD: agentskills
+      POSTGRES_DB: agentskills
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+asyncpg://agentskills:agentskills@db:5432/agentskills
+      SECRET_KEY: 0123456789abcdef0123456789abcdef
+      DEBUG: "true"
+      CORS_ORIGINS: '["http://localhost:3000"]'
+      SKILL_STORAGE_PATH: /data/skills
+    volumes:
+      - skills:/data/skills
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
+  skills:

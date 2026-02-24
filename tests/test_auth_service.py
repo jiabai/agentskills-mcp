@@ -1,7 +1,10 @@
 import pytest
 
 from mcp_agentskills.core.security.jwt_utils import decode_token
+from mcp_agentskills.models.user import User
+from mcp_agentskills.repositories.base import BaseRepository
 from mcp_agentskills.repositories.user import UserRepository
+from mcp_agentskills.schemas.user import UserInDB
 from mcp_agentskills.services.auth import AuthService
 
 
@@ -18,3 +21,25 @@ async def test_register_login_refresh(async_session):
     refreshed = await auth_service.refresh_token(token_pair.refresh_token)
     refreshed_payload = decode_token(refreshed.access_token)
     assert refreshed_payload["sub"] == str(user.id)
+
+
+@pytest.mark.asyncio
+async def test_base_repository_crud(async_session):
+    repo = BaseRepository(async_session)
+    created = await repo.create(
+        User,
+        email="base@example.com",
+        username="baseuser",
+        hashed_password="hashed",
+    )
+    fetched = await repo.get(User, created.id)
+    assert fetched is not None
+    updated = await repo.update(fetched, username="updateduser")
+    assert updated.username == "updateduser"
+    await repo.delete(updated)
+    missing = await repo.get(User, created.id)
+    assert missing is None
+
+
+def test_user_in_db_has_hashed_password():
+    assert UserInDB.model_fields.get("hashed_password") is not None

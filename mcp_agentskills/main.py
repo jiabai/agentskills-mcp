@@ -6,16 +6,17 @@ class is intended to be used as a context manager from the command line, where t
 CLI arguments are forwarded directly to the underlying FlowLLM application.
 """
 
+import importlib
 import sys
 import types
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 
 try:
-    import fastmcp
+    fastmcp = importlib.import_module("fastmcp")
 except Exception:
     fastmcp_stub = types.ModuleType("fastmcp")
     fastmcp_stub.__path__ = []
-    fastmcp_stub.__agentskills_stub__ = True
+    setattr(fastmcp_stub, "__agentskills_stub__", True)
     class Client:
         def __init__(self, *args, **kwargs):
             self.args = args
@@ -26,18 +27,18 @@ except Exception:
 
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             return None
-    fastmcp_stub.Client = Client
+    setattr(fastmcp_stub, "Client", Client)
     class FastMCP:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
             self.auth = None
 
-        def add_tool(self, *args, **kwargs):
+        def add_tool(self, *_args, **_kwargs):
             return None
 
-        def http_app(self, *args, **kwargs):
-            async def app(scope, receive, send):
+        def http_app(self, *_args, **_kwargs):
+            async def app(scope, _receive, send):
                 if scope["type"] != "http":
                     return
                 await send(
@@ -54,7 +55,7 @@ except Exception:
                     }
                 )
             return app
-    fastmcp_stub.FastMCP = FastMCP
+    setattr(fastmcp_stub, "FastMCP", FastMCP)
 
     client_pkg = types.ModuleType("fastmcp.client")
     client_pkg.__path__ = []
@@ -64,7 +65,7 @@ except Exception:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
-    client_module.CallToolResult = CallToolResult
+    setattr(client_module, "CallToolResult", CallToolResult)
 
     transports_module = types.ModuleType("fastmcp.client.transports")
     class StdioTransport:
@@ -79,16 +80,16 @@ except Exception:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
-    transports_module.StdioTransport = StdioTransport
-    transports_module.SSETransport = SSETransport
-    transports_module.StreamableHttpTransport = StreamableHttpTransport
+    setattr(transports_module, "StdioTransport", StdioTransport)
+    setattr(transports_module, "SSETransport", SSETransport)
+    setattr(transports_module, "StreamableHttpTransport", StreamableHttpTransport)
 
     tools_module = types.ModuleType("fastmcp.tools")
     class FunctionTool:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
-    tools_module.FunctionTool = FunctionTool
+    setattr(tools_module, "FunctionTool", FunctionTool)
 
     sys.modules["fastmcp"] = fastmcp_stub
     sys.modules["fastmcp.client"] = client_pkg
@@ -96,9 +97,12 @@ except Exception:
     sys.modules["fastmcp.client.transports"] = transports_module
     sys.modules["fastmcp.tools"] = tools_module
 
-from flowllm.core.application import Application
-
-from .config import ConfigParser
+if TYPE_CHECKING:
+    from flowllm.core.application import Application
+    from .config import ConfigParser
+else:
+    Application = importlib.import_module("flowllm.core.application").Application
+    ConfigParser = importlib.import_module("mcp_agentskills.config.config_parser").ConfigParser
 
 
 class AgentSkillsMcpApp(Application):

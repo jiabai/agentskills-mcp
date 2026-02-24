@@ -37,14 +37,14 @@ def install_flowllm_stubs(skill_dir: Path):
             return decorator
 
     class BaseAsyncToolOp:
-        def __init__(self, **kwargs):
+        def __init__(self, **_kwargs):
             self.input_dict = {}
             self._output = None
 
         def set_output(self, output):
             self._output = output
 
-        def get_prompt(self, prompt_name: str):
+        def get_prompt(self, _prompt_name: str):
             return "{skill_dir}"
 
     class ToolCall(dict):
@@ -224,7 +224,7 @@ def test_run_shell_command_uses_user_scoped_workdir(tmp_path):
 
     captured = {}
 
-    async def fake_create_subprocess_shell(cmd, **kwargs):
+    async def fake_create_subprocess_shell(cmd, **_kwargs):
         captured["command"] = cmd
 
         class Proc:

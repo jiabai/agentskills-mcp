@@ -1,6 +1,8 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from typing import Any
+
+from sqlalchemy import func, select
 
 from mcp_agentskills.models.token import APIToken
 from mcp_agentskills.repositories.base import BaseRepository
@@ -15,23 +17,20 @@ class TokenRepository(BaseRepository):
         result = await self.session.execute(select(APIToken).where(APIToken.token_hash == token_hash))
         return result.scalar_one_or_none()
 
-    async def list_by_user(self, user_id: str) -> list[APIToken]:
-        result = await self.session.execute(select(APIToken).where(APIToken.user_id == user_id))
+    async def list_by_user(self, user_id: str, skip: int = 0, limit: int = 100) -> list[APIToken]:
+        result = await self.session.execute(
+            select(APIToken).where(APIToken.user_id == user_id).offset(skip).limit(limit)
+        )
         return list(result.scalars().all())
 
-    async def create(
-        self,
-        user_id: str,
-        name: str,
-        token_hash: str,
-        expires_at: datetime | None,
-    ) -> APIToken:
-        token = APIToken(
-            user_id=user_id,
-            name=name,
-            token_hash=token_hash,
-            expires_at=expires_at,
+    async def count_by_user(self, user_id: str) -> int:
+        result = await self.session.execute(
+            select(func.count()).select_from(APIToken).where(APIToken.user_id == user_id)
         )
+        return int(result.scalar_one())
+
+    async def create(self, model: Any = APIToken, **data: Any) -> APIToken:
+        token = APIToken(**data)
         self.session.add(token)
         await self.session.commit()
         await self.session.refresh(token)

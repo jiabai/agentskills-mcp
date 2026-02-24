@@ -7,6 +7,7 @@ from mcp_agentskills.core.security.jwt_utils import (
     create_refresh_token,
     decode_token,
 )
+from mcp_agentskills.core.security.password import get_password_hash, verify_password
 
 
 def test_access_token_contains_type_and_subject():
@@ -35,3 +36,13 @@ def test_decode_token_rejects_expired():
         assert False
     except Exception as exc:
         assert "expired" in str(exc).lower()
+
+
+def test_password_hash_uses_bcrypt():
+    hashed = get_password_hash("pass1234")
+    assert hashed.startswith("$2")
+
+
+def test_password_verify_matches_hash():
+    hashed = get_password_hash("pass1234")
+    assert verify_password("pass1234", hashed)

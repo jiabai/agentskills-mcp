@@ -96,3 +96,9 @@ def test_timeout_settings_maximum():
             }
         )
 
+
+def test_alembic_files_exist():
+    root = Path(__file__).resolve().parents[1]
+    assert (root / "alembic.ini").exists()
+    assert (root / "mcp_agentskills" / "db" / "migrations" / "env.py").exists()
+

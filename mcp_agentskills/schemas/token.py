@@ -8,6 +8,10 @@ class TokenCreate(BaseModel):
     expires_at: datetime | None = None
 
 
+class TokenRefresh(BaseModel):
+    refresh_token: str
+
+
 class TokenResponse(BaseModel):
     id: str
     name: str
@@ -18,3 +22,8 @@ class TokenResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class TokenListResponse(BaseModel):
+    items: list[TokenResponse]
+    total: int

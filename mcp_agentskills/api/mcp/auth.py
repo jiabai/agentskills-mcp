@@ -1,13 +1,9 @@
+import importlib
 import re
 from collections.abc import AsyncGenerator, Callable
 from datetime import timezone
+from typing import TYPE_CHECKING
 
-try:
-    from fastmcp.server.auth.auth import TokenVerifier
-except Exception:
-    class TokenVerifier:
-        async def verify_token(self, token: str):
-            raise NotImplementedError
 from mcp.server.auth.provider import AccessToken
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +12,16 @@ from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.token import TokenRepository
 from mcp_agentskills.repositories.user import UserRepository
 from mcp_agentskills.services.token import TokenService
+
+if TYPE_CHECKING:
+    from fastmcp.server.auth.auth import TokenVerifier
+else:
+    try:
+        TokenVerifier = importlib.import_module("fastmcp.server.auth.auth").TokenVerifier
+    except Exception:
+        class TokenVerifier:
+            async def verify_token(self, token: str):
+                raise NotImplementedError
 
 SessionProvider = Callable[[], AsyncGenerator[AsyncSession, None]]
 
@@ -60,3 +66,4 @@ class ApiTokenVerifier(TokenVerifier):
             if api_token.expires_at:
                 expires_at = int(api_token.expires_at.replace(tzinfo=timezone.utc).timestamp())
             return AccessToken(token=token, client_id=str(user.id), scopes=[], expires_at=expires_at)
+        return None

@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 class ErrorResponse(BaseModel):
     detail: str
+    code: str
+    timestamp: str
 
 
 T = TypeVar("T")

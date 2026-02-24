@@ -22,3 +22,8 @@ class SkillResponse(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class SkillListResponse(BaseModel):
+    items: list[SkillResponse]
+    total: int

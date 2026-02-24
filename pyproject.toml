@@ -97,6 +97,10 @@ module = ["flowllm.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
+module = ["alembic", "alembic.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
 module = ["tests.run_project_http", "tests.run_project_sse", "run_project_http", "run_project_sse"]
 ignore_errors = true
 

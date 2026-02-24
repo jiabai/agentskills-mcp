@@ -1,4 +1,6 @@
-from sqlalchemy import select
+from typing import Any
+
+from sqlalchemy import func, or_, select
 
 from mcp_agentskills.models.skill import Skill
 from mcp_agentskills.repositories.base import BaseRepository
@@ -15,24 +17,39 @@ class SkillRepository(BaseRepository):
         )
         return result.scalar_one_or_none()
 
-    async def list_by_user(self, user_id: str) -> list[Skill]:
-        result = await self.session.execute(select(Skill).where(Skill.user_id == user_id))
+    async def list_by_user(
+        self, user_id: str, skip: int = 0, limit: int = 100, query: str | None = None
+    ) -> list[Skill]:
+        stmt = select(Skill).where(Skill.user_id == user_id)
+        if query:
+            pattern = f"%{query}%"
+            stmt = stmt.where(or_(Skill.name.ilike(pattern), Skill.description.ilike(pattern)))
+        stmt = stmt.offset(skip).limit(limit)
+        result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def create(self, user_id: str, name: str, description: str, skill_dir: str) -> Skill:
-        skill = Skill(user_id=user_id, name=name, description=description, skill_dir=skill_dir)
+    async def count_by_user(self, user_id: str, query: str | None = None) -> int:
+        stmt = select(func.count()).select_from(Skill).where(Skill.user_id == user_id)
+        if query:
+            pattern = f"%{query}%"
+            stmt = stmt.where(or_(Skill.name.ilike(pattern), Skill.description.ilike(pattern)))
+        result = await self.session.execute(stmt)
+        return int(result.scalar_one())
+
+    async def create(self, model: Any = Skill, **data: Any) -> Skill:
+        skill = Skill(**data)
         self.session.add(skill)
         await self.session.commit()
         await self.session.refresh(skill)
         return skill
 
-    async def update(self, skill: Skill, **fields) -> Skill:
-        for key, value in fields.items():
-            setattr(skill, key, value)
+    async def update(self, db_obj: Any, **data: Any) -> Skill:
+        for key, value in data.items():
+            setattr(db_obj, key, value)
         await self.session.commit()
-        await self.session.refresh(skill)
-        return skill
+        await self.session.refresh(db_obj)
+        return db_obj
 
-    async def delete(self, skill: Skill) -> None:
-        await self.session.delete(skill)
+    async def delete(self, db_obj: Skill) -> None:
+        await self.session.delete(db_obj)
         await self.session.commit()

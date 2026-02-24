@@ -1,3 +1,5 @@
+from typing import Any
+
 from sqlalchemy import select
 
 from mcp_agentskills.core.security.password import get_password_hash
@@ -18,20 +20,25 @@ class UserRepository(BaseRepository):
         result = await self.session.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
-    async def create(self, email: str, username: str, password: str) -> User:
-        user = User(email=email, username=username, hashed_password=get_password_hash(password))
+    async def create(self, model: Any = User, **data: Any) -> User:
+        password = data.pop("password")
+        user = User(
+            email=data["email"],
+            username=data["username"],
+            hashed_password=get_password_hash(password),
+        )
         self.session.add(user)
         await self.session.commit()
         await self.session.refresh(user)
         return user
 
-    async def update(self, user: User, **fields) -> User:
-        for key, value in fields.items():
-            setattr(user, key, value)
+    async def update(self, db_obj: Any, **data: Any) -> User:
+        for key, value in data.items():
+            setattr(db_obj, key, value)
         await self.session.commit()
-        await self.session.refresh(user)
-        return user
+        await self.session.refresh(db_obj)
+        return db_obj
 
-    async def delete(self, user: User) -> None:
-        await self.session.delete(user)
+    async def delete(self, db_obj: User) -> None:
+        await self.session.delete(db_obj)
         await self.session.commit()

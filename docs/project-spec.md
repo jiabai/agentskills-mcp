@@ -1,27 +1,6 @@
 # AgentSkills MCP 多用户Web服务改造规范
 
-> 本文档定义了将 AgentSkills MCP 从单用户服务改造为多用户Web服务的完整技术规范。
-
----
-
-## ⚠️ 重要说明：目标架构 vs 当前架构
-
-> **本文档描述的是改造完成后的目标架构**，而非当前项目结构。
->
-> - **目标架构**：包含用户系统、认证系统、API层、数据库层等新增模块
-> - **当前架构**：仅包含基础的 MCP 工具（`core/tools/`）和配置解析（`config/`）
->
-> 改造过程中，将逐步创建以下新增目录：
-> - `models/` - 数据库模型
-> - `schemas/` - Pydantic 数据验证模型
-> - `repositories/` - 数据访问层
-> - `services/` - 业务逻辑层
-> - `api/` - API 路由层
-> - `core/security/` - 安全工具
-> - `core/middleware/` - 中间件
-> - `db/` - 数据库会话和迁移
->
-> 详见 [项目结构](#7-项目结构) 章节。
+> 本文档定义了 AgentSkills MCP 多用户 Web 服务的技术规范。当前代码库已完全实现 v2.0 规范，支持多用户隔离、API Token 认证及私有 Skill 空间。
 
 ---
 
@@ -837,7 +816,7 @@ agentskills-mcp/                  # 项目根目录
 │   │   ├── __init__.py
 │   │   ├── security/
 │   │   │   ├── __init__.py
-│   │   │   ├── jwt.py            # JWT工具
+│   │   │   ├── jwt_utils.py      # JWT工具
 │   │   │   ├── password.py       # 密码哈希
 │   │   │   └── token.py          # API Token生成
 │   │   ├── middleware/

@@ -1,10 +1,13 @@
 from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+import psutil
 
 from mcp_agentskills.api.mcp import (
     McpAppProxy,
@@ -16,7 +19,7 @@ from mcp_agentskills.api.mcp import (
 from mcp_agentskills.api.router import api_router
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
-from mcp_agentskills.db.session import init_db
+from mcp_agentskills.db.session import engine, init_db
 
 
 class _SlashPathMiddleware:
@@ -67,6 +70,27 @@ def create_application() -> FastAPI:
     @application.get("/health")
     async def health():
         return {"status": "healthy"}
+
+    async def _check_db_connection() -> bool:
+        try:
+            async with engine.connect() as conn:
+                await conn.execute(text("SELECT 1"))
+            return True
+        except Exception:
+            return False
+
+    @application.get("/metrics")
+    async def metrics():
+        db_connected = await _check_db_connection()
+        skill_path = Path(settings.SKILL_STORAGE_PATH)
+        disk = psutil.disk_usage(str(skill_path))
+        memory = psutil.virtual_memory()
+        return {
+            "db_connected": db_connected,
+            "disk_usage_percent": disk.percent,
+            "memory_usage_percent": memory.percent,
+            "cpu_usage_percent": psutil.cpu_percent(),
+        }
 
     def _error_payload(detail: object, code: str) -> dict:
         return {

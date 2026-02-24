@@ -15,6 +15,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
@@ -107,6 +108,10 @@ class LoadSkillOp(BaseAsyncToolOp):
         """
         # Extract skill name from input parameters
         skill_name = self.input_dict["skill_name"]
+        valid, error = validate_skill_name(skill_name)
+        if not valid:
+            self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
+            return
         # Look up the skill directory from the metadata dictionary
         # This dictionary should be populated by LoadSkillMetadataOp
         # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
@@ -120,9 +125,9 @@ class LoadSkillOp(BaseAsyncToolOp):
 
         # Check if the SKILL.md file exists
         if not skill_path.exists():
-            content = f"❌ Skill '{skill_name}' not found"
-            logger.exception(content)
-            self.set_output(content)
+            payload = {"skill_name": skill_name, "message": "Skill not found"}
+            logger.exception(payload)
+            self.set_output(tool_error_payload(payload, "SKILL_NOT_FOUND"))
             return
 
         # Read the SKILL.md file content

@@ -14,6 +14,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_file_path, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
@@ -113,6 +114,14 @@ class ReadReferenceFileOp(BaseAsyncToolOp):
         """
         skill_name = self.input_dict["skill_name"]
         file_name = self.input_dict["file_name"]
+        valid, error = validate_skill_name(skill_name)
+        if not valid:
+            self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
+            return
+        valid, error = validate_file_path(file_name)
+        if not valid:
+            self.set_output(tool_error_payload(error, "INVALID_FILE_PATH"))
+            return
         # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
         skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
         user_id = get_current_user_id()
@@ -125,9 +134,9 @@ class ReadReferenceFileOp(BaseAsyncToolOp):
             skill_dir / user_id / skill_name / file_name if user_id else skill_dir / skill_name / file_name
         )
         if not file_path.exists():
-            content = f"File '{file_name}' not found in skill '{skill_name}'"
-            logger.exception(content)
-            self.set_output(content)
+            payload = {"skill_name": skill_name, "file_name": file_name, "message": "File not found"}
+            logger.exception(payload)
+            self.set_output(tool_error_payload(payload, "FILE_NOT_FOUND"))
             return
 
         result = file_path.read_text(encoding="utf-8")

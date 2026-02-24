@@ -1,6 +1,8 @@
-# AgentSkills MCP 多用户Web服务改造指南
+# AgentSkills MCP 多用户Web服务改造指南（已完成）
 
-> 本文档专注于重构步骤和注意事项，详细技术规范请参考 [project-spec.md](./project-spec.md)。
+> **状态**: 本重构计划已于 v2.0 版本完全实现。本文档保留作为历史参考和技术架构说明。
+>
+> 详细技术规范请参考 [project-spec.md](./project-spec.md)。
 
 ---
 

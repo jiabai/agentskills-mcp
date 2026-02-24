@@ -198,7 +198,7 @@
 
 ### 4.2 JWT 认证
 
-- [x] `core/security/jwt.py` 文件存在
+- [x] `core/security/jwt_utils.py` 文件存在
 - [x] `create_access_token()` 函数正确实现 (使用 PyJWT)
 - [x] `create_refresh_token()` 函数正确实现
 - [x] `decode_token()` 函数正确实现

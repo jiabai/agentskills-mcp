@@ -1,4 +1,6 @@
+import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from mcp_agentskills.config.settings import settings
@@ -8,6 +10,33 @@ SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_TOTAL_SIZE = 100 * 1024 * 1024
 MAX_FILES_PER_SKILL = 50
+
+
+def validate_skill_name(skill_name: str) -> tuple[bool, str]:
+    if not skill_name or not skill_name.strip():
+        return False, "Skill name cannot be empty"
+    if len(skill_name) > 120:
+        return False, "Skill name too long (max 120 characters)"
+    if "/" in skill_name or "\\" in skill_name:
+        return False, "Skill name cannot contain path separators"
+    if ".." in skill_name or skill_name in {".", ".."}:
+        return False, "Skill name contains invalid path component"
+    if skill_name.startswith("."):
+        return False, "Skill name cannot start with '.'"
+    if not SAFE_FILENAME_PATTERN.match(skill_name):
+        return False, "Skill name contains invalid characters"
+    return True, "OK"
+
+
+def tool_error_payload(detail: object, code: str) -> str:
+    return json.dumps(
+        {
+            "detail": detail,
+            "code": code,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        },
+        ensure_ascii=False,
+    )
 
 
 def get_user_skill_dir(user_id: str, skill_name: str) -> Path:
@@ -91,7 +120,7 @@ def get_safe_skill_path(base_dir: Path, user_id: str, skill_name: str, file_path
     is_valid, _ = validate_file_path(file_path)
     if not is_valid:
         return None
-    is_valid, _ = validate_file_path(skill_name)
+    is_valid, _ = validate_skill_name(skill_name)
     if not is_valid:
         return None
     target = (base / file_path).resolve()

@@ -1,5 +1,9 @@
-from alembic import op
+from typing import Any, cast
+
+from alembic import op as _op
 import sqlalchemy as sa
+
+op = cast(Any, _op)
 
 revision = "b1a2c3d4e5f6"
 down_revision = None

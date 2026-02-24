@@ -19,6 +19,7 @@ from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
 from mcp_agentskills.core.utils.command_whitelist import validate_command
+from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 @C.register_op()
@@ -145,15 +146,27 @@ class RunShellCommandOp(BaseAsyncToolOp):
         # Extract skill name and command from input parameters
         skill_name = self.input_dict["skill_name"]
         command: str = self.input_dict["command"]
+        valid, error = validate_skill_name(skill_name)
+        if not valid:
+            self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
+            return
 
         skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
         user_id = get_current_user_id()
         work_dir = skill_dir / user_id / skill_name if user_id else skill_dir / skill_name
         logger.info(f"🔧 run shell command: skill_name={skill_name} skill_dir={skill_dir} command={command}")
+        if not work_dir.exists():
+            self.set_output(
+                tool_error_payload(
+                    {"skill_name": skill_name, "message": "Skill directory not found"},
+                    "SKILL_DIR_NOT_FOUND",
+                )
+            )
+            return
 
         is_valid, error_msg = validate_command(command)
         if not is_valid:
-            self.set_output(f"Error: Command execution blocked. {error_msg}")
+            self.set_output(tool_error_payload(error_msg, "COMMAND_BLOCKED"))
             return
 
         # Auto-install dependencies for Python scripts if pipreqs is available

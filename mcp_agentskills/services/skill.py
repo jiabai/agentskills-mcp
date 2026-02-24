@@ -10,6 +10,7 @@ from mcp_agentskills.core.utils.skill_storage import (
     get_safe_skill_path,
     get_user_skill_dir,
     list_files,
+    validate_skill_name,
     validate_filename,
 )
 from mcp_agentskills.models.skill import Skill
@@ -33,6 +34,9 @@ class SkillService:
         return skill
 
     async def create_skill(self, user: User, name: str, description: str) -> Skill:
+        valid, error = validate_skill_name(name)
+        if not valid:
+            raise ValueError(error)
         if await self.skill_repo.get_by_name(user.id, name):
             raise ValueError("Skill already exists")
         path = create_skill_dir(user.id, name)

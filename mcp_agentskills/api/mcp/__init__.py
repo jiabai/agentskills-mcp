@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
@@ -18,6 +19,7 @@ from mcp_agentskills.api.mcp.sse_handler import (
     get_sse_app,
     set_sse_app,
 )
+from mcp_agentskills.config.settings import settings
 _mcp_app: Any | None = None
 _mcp_service: Any | None = None
 _initialized = False
@@ -65,6 +67,7 @@ async def ensure_mcp_initialized() -> None:
             return
         _mcp_app = AgentSkillsMcpApp("config=default")
         await _mcp_app.async_start()
+        _mcp_app.service_config.metadata["skill_dir"] = str(Path(settings.SKILL_STORAGE_PATH).resolve())
         service = MCPService(service_config=_mcp_app.service_config)
         service.mcp.auth = ApiTokenVerifier()
         for flow in C.flow_dict.values():

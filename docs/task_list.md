@@ -48,7 +48,7 @@
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
 | T2.1.1 | 创建密码哈希模块 | 创建 `core/security/password.py` | 无 | ✅ |
-| T2.1.2 | 创建 JWT 工具 | 创建 `core/security/jwt.py` | T1.1.1 | ✅ |
+| T2.1.2 | 创建 JWT 工具 | 创建 `core/security/jwt_utils.py` | T1.1.1 | ✅ |
 | T2.1.3 | 创建 API Token 工具 | 创建 `core/security/token.py` | 无 | ✅ |
 | T2.1.4 | 创建安全模块导出 | 创建 `core/security/__init__.py` | T2.1.1-T2.1.3 | ✅ |
 
@@ -204,7 +204,7 @@
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
 | T6.2.1 | 测试密码工具 | 测试 `core/security/password.py` | T2.1.1 | ✅ |
-| T6.2.2 | 测试 JWT 工具 | 测试 `core/security/jwt.py` | T2.1.2 | ✅ |
+| T6.2.2 | 测试 JWT 工具 | 测试 `core/security/jwt_utils.py` | T2.1.2 | ✅ |
 | T6.2.3 | 测试 Token 工具 | 测试 `core/security/token.py" | T2.1.3 | ✅ |
 | T6.2.4 | 测试认证服务 | 测试 `services/auth.py" | T2.4.1 | ✅ |
 | T6.2.5 | 测试用户服务 | 测试 `services/user.py" | T2.4.2 | ✅ |

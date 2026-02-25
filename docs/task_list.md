@@ -36,8 +36,8 @@
 | T1.3.1 | 创建通用响应 Schema | 创建 `schemas/response.py` | 无 | ✅ |
 | T1.3.2 | 创建 User Schema | 创建 `schemas/user.py` | T1.2.3 | ✅ |
 | T1.3.3 | 创建 Skill Schema | 创建 `schemas/skill.py` | T1.2.4 | ✅ |
-| T1.3.4 | 创建 Token Schema | 创建 `schemas/token.py" | T1.2.5 | ✅ |
-| T1.3.5 | 创建 Schema 导出 | 创建 `schemas/__init__.py" | T1.3.1-T1.3.4 | ✅ |
+| T1.3.4 | 创建 Token Schema | 创建 `schemas/token.py` | T1.2.5 | ✅ |
+| T1.3.5 | 创建 Schema 导出 | 创建 `schemas/__init__.py` | T1.3.1-T1.3.4 | ✅ |
 
 ---
 
@@ -158,7 +158,7 @@
 
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
-| T4.2.1 | 创建 MCP 服务 | 创建 `services/mcp.py` | T4.1.1-T4.1.4 | ✅ |
+| T4.2.1 | 创建 MCP 服务 | 创建 `api/mcp/__init__.py` 并在其中初始化 MCP 服务 | T4.1.1-T4.1.4 | ✅ |
 | T4.2.2 | 创建 HTTP MCP 处理器 | 创建 `api/mcp/http_handler.py` | T4.2.1, T2.2.2 | ✅ |
 | T4.2.3 | 创建 SSE MCP 处理器 | 创建 `api/mcp/sse_handler.py` | T4.2.1, T2.2.2 | ✅ |
 | T4.2.4 | 创建 MCP 模块导出 | 创建 `api/mcp/__init__.py` | T4.2.2, T4.2.3 | ✅ |
@@ -205,10 +205,10 @@
 |----|------|------|------|------|
 | T6.2.1 | 测试密码工具 | 测试 `core/security/password.py` | T2.1.1 | ✅ |
 | T6.2.2 | 测试 JWT 工具 | 测试 `core/security/jwt_utils.py` | T2.1.2 | ✅ |
-| T6.2.3 | 测试 Token 工具 | 测试 `core/security/token.py" | T2.1.3 | ✅ |
-| T6.2.4 | 测试认证服务 | 测试 `services/auth.py" | T2.4.1 | ✅ |
-| T6.2.5 | 测试用户服务 | 测试 `services/user.py" | T2.4.2 | ✅ |
-| T6.2.6 | 测试 Skill 服务 | 测试 `services/skill.py" | T2.4.4 | ✅ |
+| T6.2.3 | 测试 Token 工具 | 测试 `core/security/token.py` | T2.1.3 | ✅ |
+| T6.2.4 | 测试认证服务 | 测试 `services/auth.py` | T2.4.1 | ✅ |
+| T6.2.5 | 测试用户服务 | 测试 `services/user.py` | T2.4.2 | ✅ |
+| T6.2.6 | 测试 Skill 服务 | 测试 `services/skill.py` | T2.4.4 | ✅ |
 
 ### 6.3 集成测试
 

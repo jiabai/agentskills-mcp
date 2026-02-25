@@ -89,7 +89,7 @@ alembic upgrade head
 
 ```bash
 mkdir -p mcp_agentskills/core/security
-touch mcp_agentskills/core/security/{__init__,password,jwt,token}.py
+touch mcp_agentskills/core/security/{__init__,password,jwt_utils,token}.py
 ```
 
 **注意事项**:
@@ -185,7 +185,6 @@ else:
 #### 步骤 4.2: 创建 MCP 服务
 
 ```bash
-touch mcp_agentskills/services/mcp.py
 touch mcp_agentskills/api/mcp/{http_handler,sse_handler}.py
 ```
 
@@ -357,35 +356,7 @@ def run_in_sandbox(skill_dir: Path, command: str, user_id: str) -> str:
 
 #### 配置示例
 
-在 `config/settings.py` 中添加安全配置：
-
-```python
-class Settings(BaseSettings):
-    # ... 其他配置 ...
-    
-    # 命令安全级别: "disabled" | "whitelist" | "strict"
-    # - disabled: 无限制（仅开发环境）
-    # - whitelist: 命令白名单（推荐生产环境）
-    # - strict: 白名单 + 资源限制 + 沙箱（最高安全）
-    COMMAND_SECURITY_LEVEL: str = "whitelist"  # 默认为白名单模式
-    
-    # 命令执行超时（秒）
-    COMMAND_TIMEOUT: int = 60
-    
-    # 资源限制（仅 strict 模式）
-    COMMAND_MAX_MEMORY_MB: int = 512
-    COMMAND_MAX_CPU_PERCENT: int = 50
-```
-
-在环境变量中配置：
-
-```env
-# 生产环境建议配置
-COMMAND_SECURITY_LEVEL=strict
-COMMAND_TIMEOUT=60
-COMMAND_MAX_MEMORY_MB=512
-COMMAND_MAX_CPU_PERCENT=50
-```
+当前仓库未实现 `COMMAND_SECURITY_LEVEL` / `COMMAND_TIMEOUT` / `COMMAND_MAX_*` 等配置项，`settings.py` 与 `.env.example` 也未包含这些字段。本节仅保留安全方案说明，不提供与现状不一致的配置示例。
 
 ### 3.2 性能注意事项
 
@@ -469,7 +440,9 @@ chmod 755 /data/skills
 
 ```bash
 # FlowLLM 模式（stdio/SSE，无用户认证）
-python -m mcp_agentskills
+agentskills-mcp
+# 或直接指定模块入口
+python -m mcp_agentskills.main
 
 # FastAPI 开发环境
 uvicorn mcp_agentskills.api_app:app --reload
@@ -623,8 +596,8 @@ async def metrics():
     db_connected = await check_db_connection()
     
     # 磁盘使用率
-    disk_usage = shutil.disk_usage("/data/skills")
-    disk_percent = disk_usage.used / disk_usage.total * 100
+    disk_usage = psutil.disk_usage("/data/skills")
+    disk_percent = disk_usage.percent
     
     # 内存使用率
     memory = psutil.virtual_memory()

@@ -136,18 +136,14 @@ from typing import List, Optional
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from uuid import UUID, uuid4
+from mcp_agentskills.models.base import generate_uuid
 
 class User(Base):
     __tablename__ = "users"
     
-    # uuid4 是 callable，SQLAlchemy 会在插入时自动调用生成 UUID
-    # 建议生产环境使用数据库端生成 UUID (PostgreSQL gen_random_uuid())
-    # 注意：SQLite 测试环境不支持 gen_random_uuid()，需在 conftest.py 中处理或回退到客户端生成
-    # 这里为了兼容性，代码示例保留 client-side default=uuid4，但建议在生产环境迁移中使用 server_default
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
-    username: Mapped[str] = mapped_column(String(100), unique=True, index=True)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    email: Mapped[str] = mapped_column(String(320), unique=True, index=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
     is_superuser: Mapped[bool] = mapped_column(default=False)
@@ -177,16 +173,16 @@ from typing import List
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from uuid import UUID, uuid4
+from mcp_agentskills.models.base import generate_uuid
 
 class Skill(Base):
     __tablename__ = "skills"
     
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(500), default="")
-    skill_dir: Mapped[str] = mapped_column(String(255))
+    skill_dir: Mapped[str] = mapped_column(String(500))
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -208,15 +204,15 @@ from typing import Optional
 from sqlalchemy import String, Boolean, DateTime, ForeignKey, Index
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
-from uuid import UUID, uuid4
+from mcp_agentskills.models.base import generate_uuid
 
 class APIToken(Base):
     __tablename__ = "api_tokens"
     
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
-    user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
-    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     is_active: Mapped[bool] = mapped_column(default=True)
     expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     last_used_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -597,7 +593,7 @@ def get_current_user_from_api_token(
     token_hash = hashlib.sha256(token.encode()).hexdigest()
     
     # 3. 查询数据库
-    api_token = await token_repo.get_by_token_hash(token_hash)
+    api_token = await token_repo.get_by_hash(token_hash)
     if not api_token:
         raise HTTPException(status_code=401, detail="Token not found")
     
@@ -609,7 +605,7 @@ def get_current_user_from_api_token(
         raise HTTPException(status_code=401, detail="Token has expired")
     
     # 5. 更新最后使用时间
-    await token_repo.update_last_used(api_token.id)
+    await token_repo.mark_used(api_token)
     
     # 6. 设置用户上下文（重要：用于 MCP 工具的用户隔离）
     set_current_user_id(str(api_token.user_id))
@@ -763,7 +759,7 @@ async def async_execute(self):
 
 ```python
 from mcp_agentskills.core.utils.user_context import get_current_user_id
-from mcp_agentskills.core.utils.command_security import validate_command
+from mcp_agentskills.core.utils.command_whitelist import validate_command
 
 async def async_execute(self):
     skill_name = self.input_dict["skill_name"]
@@ -856,8 +852,7 @@ agentskills-mcp/                  # 项目根目录
 │   │   ├── __init__.py
 │   │   ├── auth.py
 │   │   ├── user.py
-│   │   ├── skill.py
-│   │   └── mcp.py
+│   │   └── skill.py
 │   ├── api/
 │   │   ├── __init__.py
 │   │   ├── deps.py
@@ -887,7 +882,9 @@ agentskills-mcp/                  # 项目根目录
 
 ```bash
 # FlowLLM 模式（stdio/SSE，无用户认证）
-python -m mcp_agentskills
+agentskills-mcp
+# 或直接指定模块入口
+python -m mcp_agentskills.main
 
 # FastAPI 模式（HTTP API，多用户认证）
 uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000

@@ -24,7 +24,7 @@
 ### 统计表格说明
 
 底部的统计表格用于跟踪整体进度：
-- **初始状态**: 所有数值为 0/0，表示尚未开始检查
+- **初始状态**: 通过为 0，未通过等于总项，表示尚未开始检查
 - **检查过程**: 手动更新"通过"和"未通过"数量
 - **完成标准**: 所有模块通过率达到 100%
 
@@ -56,21 +56,14 @@
 
 ### 1.2 环境配置
 
-- [x] `.env.example` 文件存在且包含所有必需变量
-  - [x] DATABASE_URL
-  - [x] SECRET_KEY
-  - [x] ALGORITHM
-  - [x] ACCESS_TOKEN_EXPIRE_MINUTES
-  - [x] REFRESH_TOKEN_EXPIRE_DAYS
-  - [x] DEBUG
-  - [x] CORS_ORIGINS
-  - [x] SKILL_STORAGE_PATH
+- [x] `.env.example` 文件存在（仅包含 Flow LLM 相关变量）
   - [x] FLOW_LLM_API_KEY
   - [x] FLOW_LLM_BASE_URL
+- [x] 其余环境变量在 `settings.py` 与 `project-spec.md` 中定义并需自行配置
 
 ### 1.3 Settings 配置
 
-- [x] `config/settings.py` 正确定义 Settings 类
+- [x] `mcp_agentskills/config/settings.py` 正确定义 Settings 类
 - [x] 所有环境变量已映射到 Settings 属性
 - [x] 默认值设置合理
 - [x] 包含 `.env` 文件加载配置
@@ -96,7 +89,7 @@
 
 ### 2.1 User 模型
 
-- [x] `models/user.py` 文件存在
+- [x] `mcp_agentskills/models/user.py` 文件存在
 - [x] User 类继承自 Base
 - [x] 包含所有必需字段：
   - [x] id (UUID, 主键)
@@ -112,7 +105,7 @@
 
 ### 2.2 Skill 模型
 
-- [x] `models/skill.py` 文件存在
+- [x] `mcp_agentskills/models/skill.py` 文件存在
 - [x] Skill 类继承自 Base
 - [x] 包含所有必需字段：
   - [x] id (UUID, 主键)
@@ -128,7 +121,7 @@
 
 ### 2.3 APIToken 模型
 
-- [x] `models/token.py` 文件存在
+- [x] `mcp_agentskills/models/token.py` 文件存在
 - [x] APIToken 类继承自 Base
 - [x] 包含所有必需字段：
   - [x] id (UUID, 主键)
@@ -154,7 +147,7 @@
 
 ### 3.1 User Schemas
 
-- [x] `schemas/user.py` 文件存在
+- [x] `mcp_agentskills/schemas/user.py` 文件存在
 - [x] UserCreate schema 定义正确
   - [x] email 验证
   - [x] username 验证
@@ -165,7 +158,7 @@
 
 ### 3.2 Skill Schemas
 
-- [x] `schemas/skill.py` 文件存在
+- [x] `mcp_agentskills/schemas/skill.py` 文件存在
 - [x] SkillCreate schema 定义正确
 - [x] SkillUpdate schema 定义正确
 - [x] SkillResponse schema 定义正确
@@ -173,7 +166,7 @@
 
 ### 3.3 Token Schemas
 
-- [x] `schemas/token.py` 文件存在
+- [x] `mcp_agentskills/schemas/token.py` 文件存在
 - [x] TokenCreate schema 定义正确
 - [x] TokenResponse schema 定义正确
   - [x] token 字段仅在创建时返回
@@ -181,7 +174,7 @@
 
 ### 3.4 通用响应 Schemas
 
-- [x] `schemas/response.py` 文件存在
+- [x] `mcp_agentskills/schemas/response.py` 文件存在
 - [x] 通用错误响应格式定义
 - [x] 分页响应格式定义
 
@@ -191,14 +184,14 @@
 
 ### 4.1 密码安全
 
-- [x] `core/security/password.py` 文件存在
+- [x] `mcp_agentskills/core/security/password.py` 文件存在
 - [x] `verify_password()` 函数正确实现
 - [x] `get_password_hash()` 函数正确实现
 - [x] 使用 bcrypt 算法
 
 ### 4.2 JWT 认证
 
-- [x] `core/security/jwt_utils.py` 文件存在
+- [x] `mcp_agentskills/core/security/jwt_utils.py` 文件存在
 - [x] `create_access_token()` 函数正确实现 (使用 PyJWT)
 - [x] `create_refresh_token()` 函数正确实现
 - [x] `decode_token()` 函数正确实现
@@ -206,7 +199,7 @@
 
 ### 4.3 API Token
 
-- [x] `core/security/token.py` 文件存在
+- [x] `mcp_agentskills/core/security/token.py` 文件存在
 - [x] `generate_api_token()` 函数正确实现
   - [x] 格式: `ask_live_{64位hex}`
 - [x] `hash_token()` 函数正确实现
@@ -218,7 +211,7 @@
 
 ### 5.1 Base Repository
 
-- [x] `repositories/base.py` 文件存在
+- [x] `mcp_agentskills/repositories/base.py` 文件存在
 - [x] 定义通用 CRUD 方法
   - [x] get()
   - [x] get_multi()
@@ -228,23 +221,25 @@
 
 ### 5.2 User Repository
 
-- [x] `repositories/user.py` 文件存在
+- [x] `mcp_agentskills/repositories/user.py` 文件存在
 - [x] `get_by_email()` 方法
 - [x] `get_by_username()` 方法
 - [x] `create()` 方法正确哈希密码
 
 ### 5.3 Skill Repository
 
-- [x] `repositories/skill.py` 文件存在
+- [x] `mcp_agentskills/repositories/skill.py` 文件存在
 - [x] `get_by_user_and_name()` 方法
 - [x] `get_multi_by_user()` 方法（分页）
 
 ### 5.4 Token Repository
 
-- [x] `repositories/token.py` 文件存在
-- [x] `get_by_token_hash()` 方法
-- [x] `get_active_tokens_by_user()` 方法
-- [x] `update_last_used()` 方法
+- [x] `mcp_agentskills/repositories/token.py` 文件存在
+- [x] `get_by_hash()` 方法
+- [x] `list_by_user()` 方法
+- [x] `count_by_user()` 方法
+- [x] `mark_used()` 方法
+- [x] `revoke()` 方法
 
 ---
 
@@ -252,7 +247,7 @@
 
 ### 6.1 Auth Service
 
-- [x] `services/auth.py` 文件存在
+- [x] `mcp_agentskills/services/auth.py` 文件存在
 - [x] `register()` 方法
   - [x] 检查邮箱唯一性
   - [x] 检查用户名唯一性
@@ -262,12 +257,10 @@
   - [x] 验证密码正确
   - [x] 生成 JWT Token
 - [x] `refresh_token()` 方法
-- [x] `logout()` 方法（可选）
 
 ### 6.2 User Service
 
-- [x] `services/user.py` 文件存在
-- [x] `get_current_user()` 方法
+- [x] `mcp_agentskills/services/user.py` 文件存在
 - [x] `update_user()` 方法
 - [x] `delete_user()` 方法
   - [x] 验证密码
@@ -276,7 +269,7 @@
 
 ### 6.3 Token Service
 
-- [x] `services/token.py` 文件存在
+- [x] `mcp_agentskills/services/token.py` 文件存在
 - [x] `create_token()` 方法
   - [x] 生成 Token
   - [x] 存储哈希值
@@ -287,14 +280,14 @@
 
 ### 6.4 Skill Service
 
-- [x] `services/skill.py` 文件存在
+- [x] `mcp_agentskills/services/skill.py` 文件存在
 - [x] `create_skill()` 方法
 - [x] `get_skill()` 方法
 - [x] `list_skills()` 方法（分页）
 - [x] `update_skill()` 方法
 - [x] `delete_skill()` 方法
-- [x] `upload_files()` 方法
-- [x] `list_files()` 方法
+- [x] `upload_file()` 方法
+- [x] `list_skill_files()` 方法
 
 ---
 
@@ -406,7 +399,7 @@
 
 ### 9.1 JWT 认证中间件
 
-- [x] `core/middleware/auth.py` 文件存在
+- [x] `mcp_agentskills/core/middleware/auth.py` 文件存在
 - [x] `get_current_user()` 依赖正确
 - [x] `get_current_active_user()` 依赖正确
 - [x] Token 过期处理正确
@@ -415,7 +408,7 @@
 
 ### 9.2 MCP Token 认证
 
-- [x] `api/mcp/auth.py` 文件存在
+- [x] `mcp_agentskills/api/mcp/auth.py` 文件存在
 - [x] Token 验证正确
 - [x] Token 过期检查
 - [x] Token 撤销检查
@@ -427,7 +420,7 @@
 
 ### 10.1 Skill 存储工具
 
-- [x] `core/utils/skill_storage.py` 文件存在
+- [x] `mcp_agentskills/core/utils/skill_storage.py` 文件存在
 - [x] `get_user_skill_dir()` 方法
 - [x] `create_skill_dir()` 方法
 - [x] `delete_skill_dir()` 方法
@@ -447,7 +440,7 @@
 
 ### 11.1 应用入口
 
-- [x] `api_app.py` 文件存在
+- [x] `mcp_agentskills/api_app.py` 文件存在
 - [x] `create_application()` 工厂函数
 - [x] CORS 中间件配置
 - [x] 路由注册正确
@@ -581,6 +574,48 @@
 
 ---
 
+## 16. 前端控制台 UI（Next.js + shadcn/ui，可选）
+
+> 本模块用于生成前端控制台代码时的验证清单。若项目不包含前端控制台，可忽略本模块。
+>
+> 当前 [project-spec.md](./project-spec.md) 未包含前端界面章节，如需前端规范请在该文档补充。
+
+### 16.1 工程与依赖
+
+- [?] Next.js App Router 项目已初始化
+- [?] Tailwind 已启用并使用 4px 网格间距类
+- [?] shadcn/ui 已初始化并生成基础组件
+- [?] 深色模式已启用并随主题自动适配
+
+### 16.2 组件导入与样式规则
+
+- [?] 组件导入仅来自 `@/components/ui/*`
+- [?] 未使用任何像素值类（如 `px-20`）与内联样式像素值
+- [?] 布局优先使用 Flex/Grid，避免 `float` 与 `position: absolute`
+- [?] 容器宽度使用 `container mx-auto max-w-screen-xl`
+- [?] 字体仅使用 Tailwind 排版类（如 `text-base`、`font-medium`、`leading-relaxed`）
+- [?] 颜色仅使用语义化类（如 `bg-primary`、`text-destructive`、`border-border`）
+- [?] 圆角仅使用 `rounded-lg` 或 `rounded-[var(--radius)]`
+
+### 16.3 页面与路由
+
+- [?] /login 页面存在且使用 Card 表单布局
+- [?] /register 页面存在且使用 Card 表单布局
+- [?] /dashboard 页面存在且包含概览卡片与入口操作
+- [?] /skills 页面存在且包含搜索与列表布局
+- [?] /skills/new 页面存在且包含创建 Skill 表单
+- [?] /skills/[skillId] 页面存在且包含 Tabs（概览/文件/设置）
+- [?] /tokens 页面存在且包含创建与撤销流程
+- [?] /profile 与 /security 页面存在且表单提交有状态反馈
+
+### 16.4 状态与交互
+
+- [?] 列表页包含加载态、空态与错误态
+- [?] 危险操作（删除/撤销）具备二次确认对话框
+- [?] Token 创建后仅展示一次明文并提供复制入口
+
+---
+
 ## 检查结果汇总
 
 ### 统计表格更新方法
@@ -617,22 +652,22 @@ def count_checklist_items(content: str) -> dict:
     # 匹配模块标题
     module_pattern = r'##\s+\d+\.\s+(.+?)\n'
     modules = re.findall(module_pattern, content)
-    
+
     stats = []
     total_checked = 0
     total_unchecked = 0
-    
+
     # 按模块分割内容
     sections = re.split(r'##\s+\d+\.\s+', content)[1:]
-    
+
     for i, section in enumerate(sections):
         lines = section.split('\n')
         module_name = modules[i] if i < len(modules) else f"模块{i+1}"
-        
+
         checked = len(re.findall(r'- \[x\]', section, re.IGNORECASE))
         unchecked = len(re.findall(r'- \[ \]', section))
         total = checked + unchecked
-        
+
         if total > 0:
             percentage = round(checked / total * 100, 1)
             stats.append({
@@ -644,7 +679,7 @@ def count_checklist_items(content: str) -> dict:
             })
             total_checked += checked
             total_unchecked += unchecked
-    
+
     return {
         'modules': stats,
         'total_checked': total_checked,
@@ -660,14 +695,14 @@ def print_stats(stats: dict):
     print("="*80)
     print(f"\n{'模块':<30} {'总项':>8} {'通过':>8} {'未通过':>8} {'通过率':>10}")
     print("-"*80)
-    
+
     for module in stats['modules']:
         print(f"{module['name']:<30} {module['total']:>8} {module['checked']:>8} {module['unchecked']:>8} {module['percentage']:>9}%")
-    
+
     print("-"*80)
     print(f"{'总计':<30} {stats['total']:>8} {stats['total_checked']:>8} {stats['total_unchecked']:>8} {stats['overall_percentage']:>9}%")
     print("="*80)
-    
+
     if stats['overall_percentage'] == 100:
         print("\n🎉 所有检查项已通过！")
     elif stats['overall_percentage'] >= 80:
@@ -680,7 +715,7 @@ if __name__ == "__main__":
     if not checklist_path.exists():
         print(f"错误: 找不到文件 {checklist_path}")
         exit(1)
-    
+
     content = checklist_path.read_text(encoding='utf-8')
     stats = count_checklist_items(content)
     print_stats(stats)
@@ -691,20 +726,15 @@ if __name__ == "__main__":
 python scripts/checklist_stats.py
 ```
 
-### 初始状态（模板）
-
-> **重要说明**:
-> - 以下表格是**静态模板**，显示初始状态（所有模块未开始检查）
-> - 表格不会自动更新，需要**手动更新**或**运行统计脚本**生成最新结果
-> - 推荐使用下方的 Python 脚本自动生成实时统计结果
+### 当前状态（统计结果）
 
 | 模块 | 总项 | 通过 | 未通过 | 通过率 |
 |------|------|------|--------|--------|
 | 1. 项目配置 | 31 | 31 | 0 | 100% |
-| 2. 数据库模型 | 39 | 39 | 0 | 100% |
+| 2. 数据库模型 | 42 | 42 | 0 | 100% |
 | 3. Pydantic Schemas | 21 | 21 | 0 | 100% |
 | 4. 安全模块 | 14 | 14 | 0 | 100% |
-| 5. Repository 层 | 17 | 17 | 0 | 100% |
+| 5. Repository 层 | 20 | 20 | 0 | 100% |
 | 6. Service 层 | 34 | 34 | 0 | 100% |
 | 7. API 接口 | 53 | 53 | 0 | 100% |
 | 8. MCP 工具改造 | 16 | 16 | 0 | 100% |
@@ -715,7 +745,35 @@ python scripts/checklist_stats.py
 | 13. 测试 | 17 | 17 | 0 | 100% |
 | 14. 安全 | 15 | 15 | 0 | 100% |
 | 15. 文档 | 8 | 8 | 0 | 100% |
-| **总计** | **316** | **316** | **0** | **100%** |
+| 16. 前端控制台 UI（可选） | 2 | 1 | 1 | 50% |
+| **总计** | **324** | **323** | **1** | **99.7%** |
+
+### 初始状态模板（供复制）
+
+> **重要说明**:
+> - 以下表格是**静态模板**，显示初始状态（所有模块未开始检查）
+> - 表格不会自动更新，需要**手动更新**或**运行统计脚本**生成最新结果
+> - 推荐使用下方的 Python 脚本自动生成实时统计结果
+
+| 模块 | 总项 | 通过 | 未通过 | 通过率 |
+|------|------|------|--------|--------|
+| 1. 项目配置 | 31 | 0 | 31 | 0% |
+| 2. 数据库模型 | 42 | 0 | 42 | 0% |
+| 3. Pydantic Schemas | 21 | 0 | 21 | 0% |
+| 4. 安全模块 | 14 | 0 | 14 | 0% |
+| 5. Repository 层 | 20 | 0 | 20 | 0% |
+| 6. Service 层 | 34 | 0 | 34 | 0% |
+| 7. API 接口 | 53 | 0 | 53 | 0% |
+| 8. MCP 工具改造 | 16 | 0 | 16 | 0% |
+| 9. 中间件 | 11 | 0 | 11 | 0% |
+| 10. 文件存储 | 10 | 0 | 10 | 0% |
+| 11. FastAPI 应用 | 15 | 0 | 15 | 0% |
+| 12. 部署配置 | 15 | 0 | 15 | 0% |
+| 13. 测试 | 17 | 0 | 17 | 0% |
+| 14. 安全 | 15 | 0 | 15 | 0% |
+| 15. 文档 | 8 | 0 | 8 | 0% |
+| 16. 前端控制台 UI（可选） | 2 | 0 | 2 | 0% |
+| **总计** | **324** | **0** | **324** | **0%** |
 
 > **💡 提示**: 运行 `python scripts/checklist_stats.py` 可自动生成包含实际数据的统计表格。
 

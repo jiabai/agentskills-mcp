@@ -206,11 +206,11 @@ python tests/test_reference_file_op.py <path/to/skills> <skill_name> <file_name>
 
 ### Description
 
-This tool executes shell commands and can automatically detect and install dependencies for script files (Python, JavaScript, Shell). The command is executed in the skill's directory context, allowing scripts to access skill-specific files and resources.
+This tool executes shell commands and can automatically detect and install dependencies for Python scripts (via pipreqs when available and auto_install_deps is enabled). The command is executed in the skill's directory context, allowing scripts to access skill-specific files and resources.
 
 **多用户版本**: 在用户私有的Skill目录中执行命令。
 
-> **⚠️ 安全警告**: 出于安全考虑，该工具在多用户环境下仅允许执行**白名单内的安全命令**（如 `python`, `node`, `bash` 等），且严禁包含危险操作（如 `rm -rf`, `sudo` 等）。任何未授权的命令执行请求都将被拒绝。详见 [安全规范](./project-spec.md#311-runshellcommandop-安全增强)。
+> **⚠️ 安全警告**: 出于安全考虑，该工具在多用户环境下仅允许执行**白名单内的安全命令**（如 `python`, `node`, `bash` 等），且严禁包含危险操作（如 `rm -rf`, `sudo` 等）。任何未授权的命令执行请求都将被拒绝。详见 [安全规范](./REFACTORING_GUIDE.md#311-runshellcommandop-安全增强)。
 
 ### Key Operation Flow
 
@@ -231,7 +231,7 @@ This tool executes shell commands and can automatically detect and install depen
 **多用户版本内部逻辑**:
 ```python
 from mcp_agentskills.core.utils.user_context import get_current_user_id
-from mcp_agentskills.core.utils.command_security import validate_command
+from mcp_agentskills.core.utils.command_whitelist import validate_command
 
 skill_name = self.input_dict["skill_name"]
 command = self.input_dict["command"]

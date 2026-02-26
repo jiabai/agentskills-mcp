@@ -88,24 +88,12 @@ def write_skill(base: Path, skill_name: str, description: str, body: str):
 
 
 def load_user_context():
-    module_path = (
-        Path(__file__).resolve().parents[1]
-        / "mcp_agentskills"
-        / "core"
-        / "utils"
-        / "user_context.py"
-    )
+    module_path = Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "utils" / "user_context.py"
     return load_module("mcp_agentskills.core.utils.user_context", module_path)
 
 
 def load_command_whitelist():
-    module_path = (
-        Path(__file__).resolve().parents[1]
-        / "mcp_agentskills"
-        / "core"
-        / "utils"
-        / "command_whitelist.py"
-    )
+    module_path = Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "utils" / "command_whitelist.py"
     return load_module("mcp_agentskills.core.utils.command_whitelist", module_path)
 
 
@@ -119,11 +107,7 @@ def test_load_skill_metadata_scopes_by_user_id(tmp_path):
     write_skill(tmp_path / "user-1", "user_skill", "user", "user body")
 
     module_path = (
-        Path(__file__).resolve().parents[1]
-        / "mcp_agentskills"
-        / "core"
-        / "tools"
-        / "load_skill_metadata_op.py"
+        Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "tools" / "load_skill_metadata_op.py"
     )
     module = load_module("mcp_agentskills.core.tools.load_skill_metadata_op", module_path)
 
@@ -148,13 +132,7 @@ def test_load_skill_scopes_by_user_id(tmp_path):
     write_skill(tmp_path, "shared_skill", "global", "global body")
     write_skill(tmp_path / "user-2", "shared_skill", "user", "user body")
 
-    module_path = (
-        Path(__file__).resolve().parents[1]
-        / "mcp_agentskills"
-        / "core"
-        / "tools"
-        / "load_skill_op.py"
-    )
+    module_path = Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "tools" / "load_skill_op.py"
     module = load_module("mcp_agentskills.core.tools.load_skill_op", module_path)
 
     user_context.set_current_user_id("user-2")
@@ -183,11 +161,7 @@ def test_read_reference_file_scopes_by_user_id(tmp_path):
     (tmp_path / "user-3" / "skill_x" / "reference.md").write_text("user ref", encoding="utf-8")
 
     module_path = (
-        Path(__file__).resolve().parents[1]
-        / "mcp_agentskills"
-        / "core"
-        / "tools"
-        / "read_reference_file_op.py"
+        Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "tools" / "read_reference_file_op.py"
     )
     module = load_module("mcp_agentskills.core.tools.read_reference_file_op", module_path)
 
@@ -213,13 +187,7 @@ def test_run_shell_command_uses_user_scoped_workdir(tmp_path):
     write_skill(tmp_path, "skill_cmd", "global", "global body")
     write_skill(tmp_path / "user-4", "skill_cmd", "user", "user body")
 
-    module_path = (
-        Path(__file__).resolve().parents[1]
-        / "mcp_agentskills"
-        / "core"
-        / "tools"
-        / "run_shell_command_op.py"
-    )
+    module_path = Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "tools" / "run_shell_command_op.py"
     module = load_module("mcp_agentskills.core.tools.run_shell_command_op", module_path)
 
     captured = {}
@@ -239,7 +207,7 @@ def test_run_shell_command_uses_user_scoped_workdir(tmp_path):
 
     user_context.set_current_user_id("user-4")
     op = module.RunShellCommandOp(auto_install_deps=False)
-    op.input_dict = {"skill_name": "skill_cmd", "command": "python -c \"print(1)\""}
+    op.input_dict = {"skill_name": "skill_cmd", "command": 'python -c "print(1)"'}
     asyncio.run(op.async_execute())
     expected_dir = str(tmp_path / "user-4" / "skill_cmd")
     assert f"cd {expected_dir}" in captured["command"]

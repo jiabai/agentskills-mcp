@@ -23,7 +23,10 @@ class TokenService:
         )
 
     async def create_token_with_value(
-        self, user: User, name: str, expires_at: datetime | None = None
+        self,
+        user: User,
+        name: str,
+        expires_at: datetime | None = None,
     ) -> tuple[APIToken, str]:
         token_value = generate_api_token()
         token_hash = hash_token(token_value)

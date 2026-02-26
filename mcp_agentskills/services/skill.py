@@ -23,7 +23,11 @@ class SkillService:
         self.skill_repo = skill_repo
 
     async def list_skills(
-        self, user: User, skip: int = 0, limit: int = 100, query: str | None = None
+        self,
+        user: User,
+        skip: int = 0,
+        limit: int = 100,
+        query: str | None = None,
     ) -> list[Skill]:
         return await self.skill_repo.list_by_user(user.id, skip=skip, limit=limit, query=query)
 

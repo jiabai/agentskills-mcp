@@ -52,8 +52,10 @@ async def app(async_session) -> AsyncGenerator:
     from mcp_agentskills.db.session import get_async_session
 
     application = create_application()
+
     async def _override_session():
         yield async_session
+
     application.dependency_overrides[get_async_session] = _override_session
     yield application
     application.dependency_overrides.clear()

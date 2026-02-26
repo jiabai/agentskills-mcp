@@ -19,9 +19,11 @@ else:
     try:
         TokenVerifier = importlib.import_module("fastmcp.server.auth.auth").TokenVerifier
     except Exception:
+
         class TokenVerifier:
             async def verify_token(self, token: str):
                 raise NotImplementedError
+
 
 SessionProvider = Callable[[], AsyncGenerator[AsyncSession, None]]
 

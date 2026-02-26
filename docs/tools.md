@@ -10,7 +10,7 @@
 
 | 版本 | 描述 | 主要变更 |
 |------|------|---------|
-| **v2.0** (当前) | 多用户版本 | 支持用户隔离、API Token 认证、私有 Skill 空间 |
+| **v2.0** (当前) | 多用户版本 | 支持用户隔离、（FastAPI 模式）API Token 认证、私有 Skill 空间 |
 | v1.0 | 单用户版本 | 原始版本，无用户隔离 |
 
 ---
@@ -21,8 +21,16 @@
 |------|-----------|-----------|
 | Skill路径 | `{skill_dir}/{skill_name}/` | `{skill_dir}/{user_id}/{skill_name}/` |
 | 用户隔离 | 无 | 每个用户独立的Skill空间 |
-| 认证方式 | 无 | API Token认证 |
+| 认证方式 | 无 | （FastAPI 模式）API Token 认证 |
 | 向后兼容 | - | 支持（无user_id时使用全局路径） |
+
+---
+
+## 术语说明
+
+- `skill_dir`: 指 FlowLLM 的 `C.service_config.metadata["skill_dir"]`，4 个 MCP 工具均基于该路径读写 Skill 文件
+- FastAPI 模式: 启动时会将 `skill_dir` 设置为 `SKILL_STORAGE_PATH`（环境变量），两者等价
+- 本地 stdio/SSE 模式: `skill_dir` 通常来自 FlowLLM 配置项 `metadata.skill_dir`，可与 `SKILL_STORAGE_PATH` 不同
 
 ---
 
@@ -30,7 +38,7 @@ AgentSkills MCP utilizes four tools to load Agent Skills, following the descript
 
 ---
 
-## Tool 1: load_skill_metadata_op
+## Tool 1: load_skill_metadata
 
 <p align="left">
   <em>Load metadata from all available skills (always call at task start).</em>
@@ -44,13 +52,13 @@ This tool scans the skills directory recursively for SKILL.md files and extracts
 
 ### Key Operation Flow
 
-- Gets the skills directory path from the context
+- Gets the skills directory path from `C.service_config.metadata["skill_dir"]`
 - **多用户**: 从请求级上下文获取 `user_id`（通过 `contextvars`）
 - **多用户**: 根据用户ID确定搜索目录: `{skill_dir}/{user_id}/` 或 `{skill_dir}/`
 - Recursively searches for all SKILL.md files
 - Parses each file's frontmatter to extract metadata
-- Builds a dictionary with skill names as keys
-- Sets the output with the complete metadata dictionary
+- Builds a formatted text list (each line is "- <skill_name>: <skill_description>")
+- Sets the output with the complete formatted text
 
 ### Input Parameters
 
@@ -69,7 +77,7 @@ else:
     search_dir = skill_dir            # 全局目录（向后兼容）
 ```
 
-> **注意**: `user_id` 是在 MCP 认证中间件中通过 `contextvars` 注入到请求级上下文的。每个 HTTP 请求会根据 API Token 自动识别用户身份，确保多用户并发访问时的安全隔离。详见 [project-spec.md](./project-spec.md#62-并发安全机制)。
+> **注意**: 在 FastAPI 模式下，`user_id` 会在 MCP 认证中间件中通过 `contextvars` 注入到请求级上下文。每个 HTTP 请求会根据 API Token 自动识别用户身份，确保多用户并发访问时的安全隔离。FlowLLM 本地模式下通常不会注入 `user_id`，因此会退化为全局 Skill 目录。详见 [project-spec.md](./project-spec.md#62-并发安全机制)。
 
 ### Returns
 
@@ -89,7 +97,7 @@ python tests/test_load_skill_metadata_op.py <path/to/skills>
 
 ---
 
-## Tool 2: `load_skill_op`
+## Tool 2: `load_skill`
 
 <p align="left">
   <em>Load a specific skill's instructions (i.e., SKILL.md).</em>
@@ -144,7 +152,7 @@ python tests/test_load_skill_op.py <path/to/skills> <skill_name>
 
 ---
 
-## Tool 3: read_reference_file_op
+## Tool 3: read_reference_file
 
 <p align="left">
   <em>Read reference files from a skill directory.</em>
@@ -198,7 +206,7 @@ python tests/test_reference_file_op.py <path/to/skills> <skill_name> <file_name>
 
 ---
 
-## Tool 4: run_shell_command_op
+## Tool 4: run_shell_command
 
 <p align="left">
   <em>Execute shell commands to run scripts within skill directories.</em>
@@ -206,7 +214,7 @@ python tests/test_reference_file_op.py <path/to/skills> <skill_name> <file_name>
 
 ### Description
 
-This tool executes shell commands and can automatically detect and install dependencies for Python scripts (via pipreqs when available and auto_install_deps is enabled). The command is executed in the skill's directory context, allowing scripts to access skill-specific files and resources.
+This tool executes shell commands. Optionally (disabled by default), it can automatically detect and install dependencies for Python scripts via pipreqs (when pipreqs is available and server-side auto-install is enabled). The command is executed in the skill's directory context, allowing scripts to access skill-specific files and resources.
 
 **多用户版本**: 在用户私有的Skill目录中执行命令。
 
@@ -217,7 +225,7 @@ This tool executes shell commands and can automatically detect and install depen
 - Extract skill_name and command from input
 - **多用户**: 从上下文获取 `user_id`
 - **多用户**: 确定工作目录: `{skill_dir}/{user_id}/{skill_name}/` 或 `{skill_dir}/{skill_name}/`
-- For Python commands, automatically detect and install dependencies using pipreqs (if available and auto_install_deps parameter is enabled)
+- For Python commands, optionally detect and install dependencies using pipreqs (if available and server-side auto-install is enabled)
 - Execute the command in a subprocess and capture stdout/stderr
 - Return the combined output (stdout + stderr)
 
@@ -232,6 +240,7 @@ This tool executes shell commands and can automatically detect and install depen
 ```python
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 from mcp_agentskills.core.utils.command_whitelist import validate_command
+from mcp_agentskills.core.utils.skill_storage import tool_error_payload
 
 skill_name = self.input_dict["skill_name"]
 command = self.input_dict["command"]
@@ -241,7 +250,7 @@ skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
 # 安全检查
 is_valid, error_msg = validate_command(command)
 if not is_valid:
-    return f"Error: Command execution blocked. {error_msg}"
+    return tool_error_payload(error_msg, "COMMAND_BLOCKED")
 
 if user_id:
     work_dir = skill_dir / user_id / skill_name
@@ -254,7 +263,7 @@ else:
 str: The combined stdout and stderr output from the command execution. The output is decoded as UTF-8 and formatted as: "{stdout}\n{stderr}".
 
 > [!NOTE]
-> Dependency auto-installation only occurs for commands containing "py" and when the auto_install_deps parameter is enabled.
+> Dependency auto-installation is disabled by default and only occurs for commands containing "py" when server-side auto-install is enabled.
 > The command runs in the skill's directory, allowing access to skill-specific files and resources.
 
 ### Test Demo
@@ -276,7 +285,7 @@ python tests/test_run_shell_command_op.py <path/to/skills> <skill_name> <command
       "type": "http",
       "url": "https://your-domain.com/mcp",
       "headers": {
-        "Authorization": "Bearer ask_live_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        "Authorization": "Bearer ask_live_0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
       }
     }
   }

@@ -19,13 +19,13 @@ class TokenRepository(BaseRepository):
 
     async def list_by_user(self, user_id: str, skip: int = 0, limit: int = 100) -> list[APIToken]:
         result = await self.session.execute(
-            select(APIToken).where(APIToken.user_id == user_id).offset(skip).limit(limit)
+            select(APIToken).where(APIToken.user_id == user_id).offset(skip).limit(limit),
         )
         return list(result.scalars().all())
 
     async def count_by_user(self, user_id: str) -> int:
         result = await self.session.execute(
-            select(func.count()).select_from(APIToken).where(APIToken.user_id == user_id)
+            select(func.count()).select_from(APIToken).where(APIToken.user_id == user_id),
         )
         return int(result.scalar_one())
 

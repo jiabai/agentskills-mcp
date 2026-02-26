@@ -13,12 +13,16 @@ class SkillRepository(BaseRepository):
 
     async def get_by_name(self, user_id: str, name: str) -> Skill | None:
         result = await self.session.execute(
-            select(Skill).where(Skill.user_id == user_id, Skill.name == name)
+            select(Skill).where(Skill.user_id == user_id, Skill.name == name),
         )
         return result.scalar_one_or_none()
 
     async def list_by_user(
-        self, user_id: str, skip: int = 0, limit: int = 100, query: str | None = None
+        self,
+        user_id: str,
+        skip: int = 0,
+        limit: int = 100,
+        query: str | None = None,
     ) -> list[Skill]:
         stmt = select(Skill).where(Skill.user_id == user_id)
         if query:

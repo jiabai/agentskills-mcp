@@ -37,7 +37,17 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
+            raw = v.strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                try:
+                    import json
+
+                    parsed = json.loads(raw)
+                    if isinstance(parsed, list):
+                        return [str(item).strip() for item in parsed if str(item).strip()]
+                except Exception:
+                    pass
+            return [origin.strip() for origin in raw.split(",") if origin.strip()]
         return v
 
     @model_validator(mode="after")

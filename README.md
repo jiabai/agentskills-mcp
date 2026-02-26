@@ -113,7 +113,7 @@ https://github.com/ComposioHQ/awesome-claude-skills
 </details>
 
 <details>
-<summary><strong>Remote communication (SSE/HTTP Server)</strong></summary>
+<summary><strong>Remote communication (FlowLLM SSE/HTTP Server)</strong></summary>
 
 <p align="left">
   <sub>This mode runs AgentSkills MCP as a standalone SSE/HTTP server that can be accessed remotely.</sub>
@@ -121,10 +121,10 @@ https://github.com/ComposioHQ/awesome-claude-skills
 
 **- Step 1:** Configure Environment Variables
 
-Copy `example.env` to `.env` and fill in your API key:
+Copy `.env.example` to `.env` and fill in your API key:
 
 ```bash
-cp example.env .env
+cp .env.example .env
 # Edit the .env file and fill in your API key
 ```
 
@@ -174,7 +174,7 @@ async def main():
         result = await client.call_tool(
             name="load_skill",
             arguments={
-              "skill_name"="pdf"
+              "skill_name": "pdf"
             }
         )
         print(result)
@@ -197,6 +197,39 @@ python tests/run_project_http.py <path/to/skills>
 
 </details>
 
+<details>
+<summary><strong>FastAPI multi-user mode (HTTP API + MCP)</strong></summary>
+
+<p align="left">
+  <sub>This mode starts the FastAPI app with user authentication, API Token, and private Skill space.</sub>
+</p>
+
+**- Step 1:** Configure Environment Variables
+
+Set required variables for database and security, plus LLM access:
+
+```bash
+DATABASE_URL=postgresql+asyncpg://user:password@host:5432/agentskills
+SECRET_KEY=your-32-char-secret
+FLOW_LLM_API_KEY=xxx
+FLOW_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+SKILL_STORAGE_PATH=./skills
+```
+
+**- Step 2:** Start the Server
+
+```bash
+uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000
+```
+
+**- Step 3:** Use the API
+
+- Web API base: `http://0.0.0.0:8000/api/v1`
+- MCP endpoints: `http://0.0.0.0:8000/mcp` and `http://0.0.0.0:8000/sse`
+- Create API Token via `/api/v1/tokens`, then call MCP with `Authorization: Bearer <token>`
+
+</details>
+
 ### Demo
 
 After starting the AgentSkills MCP server with the SSE transport, you can run the demo:
@@ -212,14 +245,16 @@ python run_skill_agent.py
 ## 🔧 MCP Tools
 
 This service provides four tools to support Agent Skills:
-- **load_skill_metadata_op** — Loads the names and descriptions of all Skills into the agent context at startup (always called)
-- **load_skill_op** — When a specific skill is needed, loads the SKILL.md content by skill name (invoked when triggering the Skill)
-- **read_reference_file_op** — Reads specific files from a skill, such as scripts or reference documents (on demand)
-- **run_shell_command_op** — Executes shell commands to run executable scripts included in the skill (on demand)
+- **load_skill_metadata** — Loads the names and descriptions of all Skills into the agent context at startup (always called)
+- **load_skill** — When a specific skill is needed, loads the SKILL.md content by skill name (invoked when triggering the Skill)
+- **read_reference_file** — Reads specific files from a skill, such as scripts or reference documents (on demand)
+- **run_shell_command** — Executes shell commands to run executable scripts included in the skill (on demand)
 
 For detailed parameters and usage examples, see the [documentation](docs/tools.md).
 
 ## ⚙️ Server Configuration Parameters
+
+These parameters apply to the FlowLLM mode (`agentskills-mcp`).
 
 | Parameter               | Description                                                                                                                                                  | Example                                 |
 |------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------|
@@ -232,12 +267,23 @@ For detailed parameters and usage examples, see the [documentation](docs/tools.m
 
 For the full set of available options and defaults, refer to [default.yaml](./agentskills_mcp/config/default.yaml).
 
-#### Environment Variables
+#### FlowLLM Environment Variables
 
 | Variable Name                  | Required | Description                                  |
 |----------------------|----------|----------------------------------------------|
 | `FLOW_LLM_API_KEY`   | ✅ Yes   | API key for OpenAI-compatible LLM Service       |
 | `FLOW_LLM_BASE_URL`  | ✅ Yes   | Base URL for OpenAI-compatible LLM Service    |
+
+#### FastAPI Environment Variables
+
+| Variable Name                  | Required | Description                                  |
+|----------------------|----------|----------------------------------------------|
+| `DATABASE_URL`       | ✅ Yes   | Database connection string                    |
+| `SECRET_KEY`         | ✅ Yes   | JWT signing key (>=32 characters)            |
+| `FLOW_LLM_API_KEY`   | ✅ Yes   | API key for OpenAI-compatible LLM Service       |
+| `FLOW_LLM_BASE_URL`  | ✅ Yes   | Base URL for OpenAI-compatible LLM Service    |
+| `SKILL_STORAGE_PATH` | ❌ No    | Skill storage path (defaults to config)      |
+| `CORS_ORIGINS`       | ❌ No    | Allowed origins list                          |
 
 ---
 

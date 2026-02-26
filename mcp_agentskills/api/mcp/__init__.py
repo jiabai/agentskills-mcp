@@ -20,6 +20,7 @@ from mcp_agentskills.api.mcp.sse_handler import (
     set_sse_app,
 )
 from mcp_agentskills.config.settings import settings
+
 _mcp_app: Any | None = None
 _mcp_service: Any | None = None
 _initialized = False
@@ -37,8 +38,8 @@ def _build_fallback_app() -> Starlette:
                 "/{path:path}",
                 handler,
                 methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-            )
-        ]
+            ),
+        ],
     )
 
 

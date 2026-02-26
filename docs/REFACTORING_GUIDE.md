@@ -1,8 +1,10 @@
-# AgentSkills MCP 多用户Web服务改造指南（已完成）
+# AgentSkills MCP 多用户Web服务改造指南（后端已完成）
 
-> **状态**: 本重构计划已于 v2.0 版本完全实现。本文档保留作为历史参考和技术架构说明。
+> **状态**: 当前仅完成后端 Python 侧的重构与集成（多用户隔离、Web API、MCP 认证等）。前端控制台尚未开始生成。本文档保留作为后端历史参考和技术架构说明。
 >
 > 详细技术规范请参考 [project-spec.md](./project-spec.md)。
+>
+> **命令示例说明**: 文中的 `mkdir -p` / `touch` 等以 Bash 为示例展示。在 Windows 环境下请使用等价的 PowerShell 命令或直接按目录结构创建文件即可。
 
 ---
 
@@ -289,20 +291,22 @@ def validate_command(command: str) -> tuple[bool, str]:
     cmd_parts = command.split()
     if not cmd_parts:
         return False, "Empty command"
-    
+
     base_cmd = cmd_parts[0].split("/")[-1]  # 获取命令名
     if base_cmd not in ALLOWED_COMMANDS:
         return False, f"Command '{base_cmd}' is not allowed"
-    
+
     # 检查是否匹配危险模式
     for pattern in BLOCKED_PATTERNS:
         if re.search(pattern, command, re.IGNORECASE):
             return False, f"Command contains blocked pattern: {pattern}"
-    
+
     return True, "OK"
 ```
 
 **方案二：资源限制**
+
+> 说明：`resource` 模块主要适用于 Linux/macOS 等类 Unix 系统；Windows 环境通常需要使用作业对象（Job Object）等替代机制或通过容器层做资源隔离。
 
 ```python
 # 在 RunShellCommandOp 中添加资源限制
@@ -356,6 +360,7 @@ def run_in_sandbox(skill_dir: Path, command: str, user_id: str) -> str:
 
 #### 配置示例
 
+当前实现默认启用“命令白名单 + 危险模式拦截”，且不区分开发/测试/生产环境。
 当前仓库未实现 `COMMAND_SECURITY_LEVEL` / `COMMAND_TIMEOUT` / `COMMAND_MAX_*` 等配置项，`settings.py` 与 `.env.example` 也未包含这些字段。本节仅保留安全方案说明，不提供与现状不一致的配置示例。
 
 ### 3.2 性能注意事项
@@ -372,8 +377,9 @@ def run_in_sandbox(skill_dir: Path, command: str, user_id: str) -> str:
 | 场景 | 处理方式 |
 |------|---------|
 | 现有 Skill 格式 | 完全兼容，无需修改 |
-| stdio 传输模式 | 保持支持，无用户隔离 |
-| HTTP/SSE 传输模式 | 新增认证，支持用户隔离 |
+| FlowLLM stdio 传输模式 | 保持支持，无用户隔离 |
+| FlowLLM SSE 传输模式 | 保持支持，无用户隔离 |
+| FastAPI HTTP/SSE 传输模式 | 新增认证，支持用户隔离 |
 | 现有配置文件 | 扩展而非替换 |
 | 跨平台路径 | 使用 `pathlib.Path` 自动处理 |
 
@@ -535,12 +541,12 @@ def backup_database(backup_dir: Path, db_name: str = "agentskills", keep_days: i
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d")
     backup_file = backup_dir / f"{db_name}_{timestamp}.sql"
-    
+
     # 执行 pg_dump
     with open(backup_file, "w") as f:
         subprocess.run(["pg_dump", db_name], stdout=f, check=True)
     print(f"Database backup created: {backup_file}")
-    
+
     # 清理旧备份
     cleanup_old_backups(backup_dir, f"{db_name}_*.sql", keep_days)
 
@@ -549,11 +555,11 @@ def backup_skills(backup_dir: Path, skills_path: Path, keep_days: int = 7):
     backup_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d")
     backup_file = backup_dir / f"skills_{timestamp}"
-    
+
     # 使用 shutil 制作压缩包（跨平台）
     shutil.make_archive(str(backup_file), "zip", skills_path)
     print(f"Skills backup created: {backup_file}.zip")
-    
+
     # 清理旧备份
     cleanup_old_backups(backup_dir, "skills_*.zip", keep_days)
 
@@ -568,7 +574,7 @@ def cleanup_old_backups(backup_dir: Path, pattern: str, keep_days: int):
 if __name__ == "__main__":
     backup_dir = Path(os.getenv("BACKUP_DIR", "/backup"))
     skills_path = Path(os.getenv("SKILL_STORAGE_PATH", "/data/skills"))
-    
+
     backup_database(backup_dir)
     backup_skills(backup_dir, skills_path)
 ```
@@ -579,10 +585,12 @@ if __name__ == "__main__":
 
 ```python
 # api_app.py 添加健康检查
-from fastapi import Response
 from sqlalchemy import text
+from pathlib import Path
 import psutil
-import shutil
+
+from mcp_agentskills.config.settings import settings
+from mcp_agentskills.db.session import engine
 
 
 @app.get("/health")
@@ -594,17 +602,17 @@ async def health_check():
 async def metrics():
     # 数据库连接检查
     db_connected = await check_db_connection()
-    
+
     # 磁盘使用率
-    disk_usage = psutil.disk_usage("/data/skills")
-    disk_percent = disk_usage.percent
-    
+    skill_path = Path(settings.SKILL_STORAGE_PATH)
+    disk = psutil.disk_usage(str(skill_path))
+
     # 内存使用率
     memory = psutil.virtual_memory()
-    
+
     return {
         "db_connected": db_connected,
-        "disk_usage_percent": round(disk_percent, 2),
+        "disk_usage_percent": disk.percent,
         "memory_usage_percent": memory.percent,
         "cpu_usage_percent": psutil.cpu_percent(),
     }
@@ -612,7 +620,6 @@ async def metrics():
 
 async def check_db_connection() -> bool:
     try:
-        from mcp_agentskills.db.session import engine
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
         return True

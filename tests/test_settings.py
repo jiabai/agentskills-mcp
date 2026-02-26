@@ -5,18 +5,14 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-settings_path = (
-    Path(__file__).resolve().parents[1]
-    / "mcp_agentskills"
-    / "config"
-    / "settings.py"
-)
+settings_path = Path(__file__).resolve().parents[1] / "mcp_agentskills" / "config" / "settings.py"
 os.environ.setdefault(
-    "DATABASE_URL", "postgresql+asyncpg://user:pass@localhost:5432/agentskills"
+    "DATABASE_URL",
+    "postgresql+asyncpg://user:pass@localhost:5432/agentskills",
 )
 os.environ.setdefault("SECRET_KEY", "a" * 32)
 os.environ.setdefault("DEBUG", "true")
-os.environ.setdefault("CORS_ORIGINS", "[\"http://localhost:3000\"]")
+os.environ.setdefault("CORS_ORIGINS", '["http://localhost:3000"]')
 spec = importlib.util.spec_from_file_location("settings_module", settings_path)
 assert spec is not None
 assert spec.loader is not None
@@ -42,7 +38,7 @@ def test_parse_cors_origins_from_string():
             **base_settings_kwargs(),
             "DEBUG": True,
             "CORS_ORIGINS": "http://a.com, http://b.com",
-        }
+        },
     )
     assert settings.CORS_ORIGINS == ["http://a.com", "http://b.com"]
 
@@ -53,7 +49,7 @@ def test_secret_key_too_short():
             **{
                 **base_settings_kwargs(),
                 "SECRET_KEY": "short",
-            }
+            },
         )
 
 
@@ -63,7 +59,7 @@ def test_pool_settings_minimum():
             **{
                 **base_settings_kwargs(),
                 "DATABASE_POOL_SIZE": 0,
-            }
+            },
         )
 
 
@@ -73,7 +69,7 @@ def test_pool_settings_maximum():
             **{
                 **base_settings_kwargs(),
                 "DATABASE_MAX_OVERFLOW": 101,
-            }
+            },
         )
 
 
@@ -83,7 +79,7 @@ def test_timeout_settings_minimum():
             **{
                 **base_settings_kwargs(),
                 "DATABASE_POOL_TIMEOUT": 0,
-            }
+            },
         )
 
 
@@ -93,7 +89,7 @@ def test_timeout_settings_maximum():
             **{
                 **base_settings_kwargs(),
                 "DATABASE_POOL_RECYCLE": 3601,
-            }
+            },
         )
 
 
@@ -101,4 +97,3 @@ def test_alembic_files_exist():
     root = Path(__file__).resolve().parents[1]
     assert (root / "alembic.ini").exists()
     assert (root / "mcp_agentskills" / "db" / "migrations" / "env.py").exists()
-

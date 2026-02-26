@@ -22,6 +22,7 @@ from mcp_agentskills.core.utils.command_whitelist import validate_command
 from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
+
 @C.register_op()
 class RunShellCommandOp(BaseAsyncToolOp):
     """Operation for running shell commands in a subprocess.
@@ -160,7 +161,7 @@ class RunShellCommandOp(BaseAsyncToolOp):
                 tool_error_payload(
                     {"skill_name": skill_name, "message": "Skill directory not found"},
                     "SKILL_DIR_NOT_FOUND",
-                )
+                ),
             )
             return
 

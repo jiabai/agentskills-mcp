@@ -17,6 +17,7 @@ except Exception:
     fastmcp_stub = types.ModuleType("fastmcp")
     fastmcp_stub.__path__ = []
     setattr(fastmcp_stub, "__agentskills_stub__", True)
+
     class Client:
         def __init__(self, *args, **kwargs):
             self.args = args
@@ -27,7 +28,9 @@ except Exception:
 
         async def __aexit__(self, exc_type, exc_val, exc_tb):
             return None
+
     setattr(fastmcp_stub, "Client", Client)
+
     class FastMCP:
         def __init__(self, *args, **kwargs):
             self.args = args
@@ -46,49 +49,59 @@ except Exception:
                         "type": "http.response.start",
                         "status": 401,
                         "headers": [(b"content-type", b"application/json")],
-                    }
+                    },
                 )
                 await send(
                     {
                         "type": "http.response.body",
                         "body": b'{"detail":"Unauthorized"}',
-                    }
+                    },
                 )
+
             return app
+
     setattr(fastmcp_stub, "FastMCP", FastMCP)
 
     client_pkg = types.ModuleType("fastmcp.client")
     client_pkg.__path__ = []
 
     client_module = types.ModuleType("fastmcp.client.client")
+
     class CallToolResult:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
+
     setattr(client_module, "CallToolResult", CallToolResult)
 
     transports_module = types.ModuleType("fastmcp.client.transports")
+
     class StdioTransport:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
+
     class SSETransport:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
+
     class StreamableHttpTransport:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
+
     setattr(transports_module, "StdioTransport", StdioTransport)
     setattr(transports_module, "SSETransport", SSETransport)
     setattr(transports_module, "StreamableHttpTransport", StreamableHttpTransport)
 
     tools_module = types.ModuleType("fastmcp.tools")
+
     class FunctionTool:
         def __init__(self, *args, **kwargs):
             self.args = args
             self.kwargs = kwargs
+
     setattr(tools_module, "FunctionTool", FunctionTool)
 
     sys.modules["fastmcp"] = fastmcp_stub

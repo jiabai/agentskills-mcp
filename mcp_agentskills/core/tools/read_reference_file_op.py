@@ -17,6 +17,7 @@ from flowllm.core.schema import ToolCall
 from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_file_path, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
+
 @C.register_op()
 class ReadReferenceFileOp(BaseAsyncToolOp):
     """Operation for reading reference files from a skill directory.
@@ -130,9 +131,7 @@ class ReadReferenceFileOp(BaseAsyncToolOp):
             f"with skill_dir={skill_dir}",
         )
 
-        file_path = (
-            skill_dir / user_id / skill_name / file_name if user_id else skill_dir / skill_name / file_name
-        )
+        file_path = skill_dir / user_id / skill_name / file_name if user_id else skill_dir / skill_name / file_name
         if not file_path.exists():
             payload = {"skill_name": skill_name, "file_name": file_name, "message": "File not found"}
             logger.exception(payload)

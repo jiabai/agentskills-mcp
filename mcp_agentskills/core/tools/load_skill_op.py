@@ -18,6 +18,7 @@ from flowllm.core.schema import ToolCall
 from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
+
 @C.register_op()
 class LoadSkillOp(BaseAsyncToolOp):
     """Operation for loading a specific skill's instructions.
@@ -119,9 +120,7 @@ class LoadSkillOp(BaseAsyncToolOp):
         user_id = get_current_user_id()
         logger.info(f"🔧 Tool called: load_skill(skill_name='{skill_name}') with skill_dir={skill_dir}")
 
-        skill_path = (
-            skill_dir / user_id / skill_name / "SKILL.md" if user_id else skill_dir / skill_name / "SKILL.md"
-        )
+        skill_path = skill_dir / user_id / skill_name / "SKILL.md" if user_id else skill_dir / skill_name / "SKILL.md"
 
         # Check if the SKILL.md file exists
         if not skill_path.exists():

@@ -130,6 +130,8 @@
 
 ## 3. 数据模型
 
+> **一致性说明**: 本章代码片段以“规范/推荐实现”为主，部分细节（例如 `ForeignKey(..., ondelete="CASCADE")` 的数据库级联删除）在当前仓库实现中未开启；当前实现主要依赖 ORM 关系的 `cascade="all, delete-orphan"` 行为来清理关联数据。若对数据库级联有硬性要求，请以仓库迁移脚本与模型定义为准并按需补齐。
+
 ### 3.1 User 模型
 
 ```python
@@ -246,6 +248,8 @@ class APIToken(Base):
   3. 提前 3 个月通知用户迁移
 
 #### API 版本弃用实现方案
+
+> 本节为参考实现/可选扩展，当前仓库未实现 `core/middleware/deprecation.py`、`core/decorators/deprecation.py`、`services/notification.py` 等代码。若需要该能力，请按本文示例自行落地并以实际代码为准。
 
 使用 FastAPI 中间件实现自动添加弃用响应头：
 
@@ -419,7 +423,7 @@ class DeprecationNotifier:
 | `/register` | POST | 否 | 用户注册 |
 | `/login` | POST | 否 | 用户登录，返回JWT |
 | `/refresh` | POST | 否（需 refresh_token） | 刷新Access Token（请求体提供 refresh_token） |
-| `/logout` | POST | 是 | 登出（可选能力，当前仓库未实现 Token 黑名单） |
+| `/logout` | POST | 是 | 登出（可选能力，当前仓库未实现该端点；且未实现 Token 黑名单） |
 
 ### 4.2 用户模块 `/api/v1/users`
 
@@ -745,6 +749,7 @@ async def async_execute(self):
 ```python
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 from mcp_agentskills.core.utils.command_whitelist import validate_command
+from mcp_agentskills.core.utils.skill_storage import tool_error_payload
 
 async def async_execute(self):
     skill_name = self.input_dict["skill_name"]
@@ -755,7 +760,7 @@ async def async_execute(self):
     # 安全检查：验证命令是否在白名单中
     is_valid, error_msg = validate_command(command)
     if not is_valid:
-        return f"Error: Command execution blocked. {error_msg}"
+        return tool_error_payload(error_msg, "COMMAND_BLOCKED")
 
     if user_id:
         work_dir = skill_dir / user_id / skill_name
@@ -771,7 +776,7 @@ async def async_execute(self):
 
 > **说明**: 项目根目录为 `agentskills-mcp/`，Python 包名为 `mcp_agentskills`。
 >
-> **注意**: 以下结构为改造后的目标结构。`core/security/`、`core/middleware/`、`models/`、`schemas/`、`repositories/`、`services/`、`api/`、`db/` 等目录为新增模块，将在改造过程中创建。现有 `core/tools/` 和 `core/utils/` 目录将保留并扩展。
+> **注意**: 以下结构为当前仓库后端代码的实际结构（前端控制台未包含）。`core/security/`、`core/middleware/`、`models/`、`schemas/`、`repositories/`、`services/`、`api/`、`db/` 等目录为多用户改造引入的模块，已在仓库中创建。现有 `core/tools/` 和 `core/utils/` 目录将保留并扩展。
 
 ### 7.1 双模式架构
 
@@ -1026,7 +1031,7 @@ SKILL_STORAGE_PATH=/data/skills
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60
 
-# LLM
+# LLM（可选：仅在需要调用 LLM Provider 时配置）
 FLOW_LLM_API_KEY=your-api-key
 FLOW_LLM_BASE_URL=https://api.openai.com/v1
 ```
@@ -1342,24 +1347,32 @@ def validate_filename(filename: str) -> tuple[bool, str]:
 
 ```python
 # 在 API 端点中使用
-from mcp_agentskills.core.utils.skill_storage import validate_file_path, get_safe_skill_path
+from mcp_agentskills.core.utils.skill_storage import get_safe_skill_path, validate_filename
+from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.skill import SkillRepository
+from mcp_agentskills.services.skill import SkillService
 
 @app.post("/api/v1/skills/upload")
 async def upload_skill_file(
     skill_id: str,
     file: UploadFile,
     current_user: User = Depends(get_current_user),
+    session=Depends(get_async_session),
 ):
     # 验证文件名
     is_valid, error = validate_filename(file.filename)
     if not is_valid:
         raise HTTPException(status_code=400, detail=error)
 
+    # skill_id 是数据库记录 ID；目录名使用 skill.name（与 /data/skills/{user_id}/{skill_name}/ 结构一致）
+    service = SkillService(SkillRepository(session))
+    skill = await service.get_skill(current_user, skill_id)
+
     # 获取安全路径
     safe_path = get_safe_skill_path(
         base_dir=Path(settings.SKILL_STORAGE_PATH),
         user_id=str(current_user.id),
-        skill_name=skill_id,
+        skill_name=skill.name,
         file_path=file.filename,
     )
 

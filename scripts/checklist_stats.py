@@ -21,8 +21,8 @@ def count_checklist_items(content: str) -> dict:
     for i, section in enumerate(sections):
         module_name = modules[i] if i < len(modules) else f"模块{i+1}"
 
-        checked = len(re.findall(r"- \[x\]", section, re.IGNORECASE))
-        unchecked = len(re.findall(r"- \[ \]", section))
+        checked = len(re.findall(r"(?im)^\s*- \[x\]", section))
+        unchecked = len(re.findall(r"(?m)^\s*- \[ \]", section))
         total = checked + unchecked
 
         if total > 0:

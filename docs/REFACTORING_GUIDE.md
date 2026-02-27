@@ -128,7 +128,7 @@ touch mcp_agentskills/repositories/{__init__,base,user,skill,token}.py
 
 ```bash
 mkdir -p mcp_agentskills/services
-touch mcp_agentskills/services/{__init__,auth,user,skill,token,mcp}.py
+touch mcp_agentskills/services/{__init__,auth,user,skill,token}.py
 ```
 
 **注意事项**:
@@ -202,24 +202,51 @@ touch mcp_agentskills/api/mcp/{http_handler,sse_handler}.py
 > **重要**: 现有 `main.py`（FlowLLM 入口）保持不变，用于 stdio/SSE 模式。新增 `api_app.py` 用于 HTTP API 模式。
 
 ```python
-# api_app.py 新建文件
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from mcp_agentskills.db.session import init_db
+from mcp_agentskills.api.mcp import (
+    McpAppProxy,
+    ensure_mcp_initialized,
+    get_http_app,
+    get_sse_app,
+    shutdown_mcp,
+)
 from mcp_agentskills.api.router import api_router
+from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
+from mcp_agentskills.db.session import init_db
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
-    await init_db()  # 初始化数据库
-    yield
+async def lifespan(_application: FastAPI):
+    await init_db()
+    await ensure_mcp_initialized()
+    async with AsyncExitStack() as stack:
+        for mcp_app in (get_http_app(), get_sse_app()):
+            router = getattr(mcp_app, "router", None)
+            lifespan_context = getattr(router, "lifespan_context", None) if router else None
+            if lifespan_context:
+                await stack.enter_async_context(lifespan_context(mcp_app))
+        yield
+    await shutdown_mcp()
 
 def create_application() -> FastAPI:
-    app = FastAPI(lifespan=lifespan)
-    app.add_middleware(CORSMiddleware, ...)
-    app.include_router(api_router, prefix="/api/v1")
-    return app
+    application = FastAPI(lifespan=lifespan, redirect_slashes=False)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    application.add_middleware(RateLimitMiddleware)
+    application.include_router(api_router, prefix="/api/v1")
+    application.mount("/mcp", McpAppProxy(get_http_app))
+    application.mount("/sse", McpAppProxy(get_sse_app))
+    return application
+
+app = create_application()
 ```
 
 #### 步骤 5.2: 创建部署配置
@@ -417,11 +444,14 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 # 必需变量
 DATABASE_URL=postgresql+asyncpg://...
 SECRET_KEY=...  # 至少32字符
-FLOW_LLM_API_KEY=...
+
+# 生产环境必需（DEBUG=false）
+CORS_ORIGINS=["https://your-domain.com"]
 
 # 可选变量
-CORS_ORIGINS=["https://your-domain.com"]
 SKILL_STORAGE_PATH=/data/skills
+FLOW_LLM_API_KEY=...  # 仅在需要调用 LLM Provider 时配置
+FLOW_LLM_BASE_URL=https://api.openai.com/v1
 ```
 
 ### 5.2 数据库准备
@@ -525,6 +555,8 @@ Get-ChildItem "C:\backup\skills_*.zip" | Where-Object { $_.LastWriteTime -lt (Ge
 ```
 
 #### 跨平台备份脚本（推荐）
+
+> **说明**: 下方为参考实现/可选扩展，当前仓库未提供 `scripts/backup.py`。若需要该能力，请按示例自行落地并以实际代码为准。
 
 使用 Python 脚本实现跨平台兼容：
 

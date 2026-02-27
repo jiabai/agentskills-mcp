@@ -1,4 +1,4 @@
-# Tool Documentation
+# 工具文档（Tool Documentation）
 
 > **当前版本**: v2.0（支持多用户隔离）
 >
@@ -10,7 +10,7 @@
 
 | 版本 | 描述 | 主要变更 |
 |------|------|---------|
-| **v2.0** (当前) | 多用户版本 | 支持用户隔离、（FastAPI 模式）API Token 认证、私有 Skill 空间 |
+| **v2.0** (当前) | 多用户版本 | 支持用户隔离、（FastAPI 模式）Web API(JWT) + MCP(API Token) 认证、私有 Skill 空间 |
 | v1.0 | 单用户版本 | 原始版本，无用户隔离 |
 
 ---
@@ -21,7 +21,7 @@
 |------|-----------|-----------|
 | Skill路径 | `{skill_dir}/{skill_name}/` | `{skill_dir}/{user_id}/{skill_name}/` |
 | 用户隔离 | 无 | 每个用户独立的Skill空间 |
-| 认证方式 | 无 | （FastAPI 模式）API Token 认证 |
+| 认证方式 | 无 | Web API 使用 JWT；MCP 使用 API Token（`ask_live_...`） |
 | 向后兼容 | - | 支持（无user_id时使用全局路径） |
 
 ---
@@ -34,7 +34,7 @@
 
 ---
 
-AgentSkills MCP utilizes four tools to load Agent Skills, following the descriptions in [Anthropic's Agent Skills Engineering Blog](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) to implement *Progressive Disclosure* architecture.
+AgentSkills MCP 提供 4 个工具用于加载 Agent Skills，并参考 [Anthropic 的 Agent Skills 工程实践](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) 来实现 *Progressive Disclosure* 架构。
 
 ---
 
@@ -139,7 +139,7 @@ else:
 
 ### Returns
 
-str: The skill instructions content. If the SKILL.md file exists, returns the file content. Otherwise, returns an error message string.
+str: The skill instructions content. If the SKILL.md file exists, returns the file content. Otherwise, returns a JSON string payload produced by `tool_error_payload` (including `detail`, `code`, and `timestamp`).
 
 > [!TIP]
 > You can ref to [official Anthropic documentation](https://code.claude.com/docs/en/skills) on the Skills format.
@@ -196,7 +196,7 @@ else:
 
 ### Returns
 
-str: The content of the reference file read from the skill directory. If the file is not found, returns an error message string indicating that the file was not found in the specified skill.
+str: The content of the reference file read from the skill directory. If the file is not found, returns a JSON string payload produced by `tool_error_payload` (including `detail`, `code`, and `timestamp`).
 
 ### Test Demo
 
@@ -260,7 +260,7 @@ else:
 
 ### Returns
 
-str: The combined stdout and stderr output from the command execution. The output is decoded as UTF-8 and formatted as: "{stdout}\n{stderr}".
+str: On success, returns the combined stdout and stderr output from the command execution (decoded as UTF-8) and formatted as: "{stdout}\n{stderr}". If the command is blocked, returns a JSON string payload from `tool_error_payload` (for example with `code` = "COMMAND_BLOCKED").
 
 > [!NOTE]
 > Dependency auto-installation is disabled by default and only occurs for commands containing "py" when server-side auto-install is enabled.

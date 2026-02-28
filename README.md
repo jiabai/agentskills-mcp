@@ -230,6 +230,20 @@ uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000
 
 </details>
 
+### Frontend Console
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+Environment variable:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
 ### Demo
 
 After starting the AgentSkills MCP server with the SSE transport, you can run the demo:

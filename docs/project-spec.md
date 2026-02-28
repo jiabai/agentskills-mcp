@@ -1,6 +1,6 @@
 # AgentSkills MCP 多用户Web服务改造规范
 
-> 本文档定义了 AgentSkills MCP 多用户 Web 服务（后端）的技术规范。当前代码库已生成并集成后端 Python 侧的核心能力（多用户隔离、API Token 认证、私有 Skill 空间等）。前端控制台尚未开始生成。
+> 本文档定义了 AgentSkills MCP 多用户 Web 服务的技术规范。当前代码库已生成并集成后端 Python 侧的核心能力（多用户隔离、API Token 认证、私有 Skill 空间等），并已补齐前端控制台实现。
 >
 > 本文档中也包含少量“可选扩展/参考实现”的示例片段，未必在仓库中默认启用；如与实际实现不一致，以代码为准。
 
@@ -776,7 +776,7 @@ async def async_execute(self):
 
 > **说明**: 项目根目录为 `agentskills-mcp/`，Python 包名为 `mcp_agentskills`。
 >
-> **注意**: 以下结构为当前仓库后端代码的实际结构（前端控制台未包含）。`core/security/`、`core/middleware/`、`models/`、`schemas/`、`repositories/`、`services/`、`api/`、`db/` 等目录为多用户改造引入的模块，已在仓库中创建。现有 `core/tools/` 和 `core/utils/` 目录将保留并扩展。
+> **注意**: 以下结构为当前仓库后端与前端控制台的实际结构。`core/security/`、`core/middleware/`、`models/`、`schemas/`、`repositories/`、`services/`、`api/`、`db/` 等目录为多用户改造引入的模块，已在仓库中创建。现有 `core/tools/` 和 `core/utils/` 目录将保留并扩展。
 
 ### 7.1 双模式架构
 
@@ -863,6 +863,7 @@ agentskills-mcp/                  # 项目根目录
 │       ├── session.py
 │       └── migrations/
 ├── tests/
+├── frontend/
 ├── docs/
 ├── pyproject.toml
 └── README.md
@@ -921,6 +922,26 @@ def create_application() -> FastAPI:
     return app
 
 app = create_application()
+```
+
+---
+
+### 7.4 前端控制台
+
+前端控制台位于 `frontend/`，使用 Next.js App Router + Tailwind + shadcn/ui，提供登录、注册、Dashboard、Skills、Tokens、Profile、Security 等页面，并与后端 API 进行联调。
+
+启动方式：
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+环境变量：
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
 
 ---

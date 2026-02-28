@@ -19,8 +19,29 @@ log/
 runs
 logs
 *.egg-info/*
-build/*
+build/
 **/cache/**
 *.pdf
 *.csv
 site/*
+
+# Node.js
+frontend/node_modules/
+
+# Next.js
+frontend/.next/
+
+# Python
+*.pyc
+*.pyo
+.pytest_cache/
+.coverage
+.ruff_cache/
+.mypy_cache/
+.tox/
+.hypothesis/
+
+# Editors
+*.swp
+*.swo
+*~

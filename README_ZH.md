@@ -199,6 +199,20 @@ python tests/run_project_http.py <path/to/skills>
 
 </details>
 
+### 前端控制台
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+环境变量：
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
 ### 示例Demo
 
 当使用 SSE 传输方式启动 AgentSkills MCP 服务器后，可执行演示：

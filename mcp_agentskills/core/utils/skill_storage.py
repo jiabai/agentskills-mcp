@@ -15,8 +15,8 @@ MAX_FILES_PER_SKILL = 50
 def validate_skill_name(skill_name: str) -> tuple[bool, str]:
     if not skill_name or not skill_name.strip():
         return False, "Skill name cannot be empty"
-    if len(skill_name) > 120:
-        return False, "Skill name too long (max 120 characters)"
+    if len(skill_name) > 100:
+        return False, "Skill name too long (max 100 characters)"
     if "/" in skill_name or "\\" in skill_name:
         return False, "Skill name cannot contain path separators"
     if ".." in skill_name or skill_name in {".", ".."}:

@@ -17,6 +17,7 @@ BLOCKED_PATTERNS: list[str] = [
     r"curl.*\|.*bash",
     r"wget.*\|.*sh",
     r"\.\./",
+    r"\.\.\\",
 ]
 
 

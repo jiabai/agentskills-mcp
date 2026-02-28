@@ -36,6 +36,27 @@ async def test_skill_lifecycle(client, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_skill_name_max_length(client):
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "longskill@example.com", "username": "longskill", "password": "pass1234"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "longskill@example.com", "password": "pass1234"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    long_name = "s" * 101
+    response = await client.post(
+        "/api/v1/skills",
+        json={"name": long_name, "description": "desc"},
+        headers=headers,
+    )
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_skill_upload_and_list_files(client, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
     await client.post(

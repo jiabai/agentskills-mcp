@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class TokenCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=100)
     expires_at: datetime | None = None
 
 

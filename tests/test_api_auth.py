@@ -17,7 +17,11 @@ async def test_register_login_refresh(client):
         json={"email": "api@example.com", "password": "pass1234"},
     )
     assert login.status_code == 200
-    refresh_token = login.json()["refresh_token"]
+    payload = login.json()
+    assert "access_token" in payload
+    assert "refresh_token" in payload
+    assert "token_type" not in payload
+    refresh_token = payload["refresh_token"]
     refreshed = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
     assert refreshed.status_code == 200
 
@@ -28,6 +32,7 @@ async def test_refresh_requires_token(client):
     assert response.status_code == 422
     payload = response.json()
     assert "detail" in payload
+    assert isinstance(payload["detail"], str)
     assert "code" in payload
     assert "timestamp" in payload
 
@@ -63,15 +68,39 @@ async def test_rate_limit_enforced():
     settings.RATE_LIMIT_REQUESTS = original_requests
     settings.RATE_LIMIT_WINDOW = original_window
     assert first.status_code == 200
-    assert second.status_code == 429
+    assert second.status_code == 403
 
 
 @pytest.mark.asyncio
-async def test_health_includes_db_status(client):
+async def test_health_returns_minimal_payload(client):
     response = await client.get("/health")
     assert response.status_code == 200
     payload = response.json()
-    assert "db_connected" in payload
+    assert payload == {"status": "healthy"}
+
+
+@pytest.mark.asyncio
+async def test_health_ignores_db_failure(monkeypatch):
+    from mcp_agentskills import api_app
+
+    class BrokenConnection:
+        async def __aenter__(self):
+            raise RuntimeError("db down")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class BrokenEngine:
+        def connect(self):
+            return BrokenConnection()
+
+    monkeypatch.setattr(api_app, "engine", BrokenEngine())
+    app = create_application()
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as session:
+        response = await session.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "healthy"}
 
 
 @pytest.mark.asyncio
@@ -101,3 +130,23 @@ async def test_logging_middleware_records_request(client, monkeypatch):
     response = await client.get("/health")
     assert response.status_code == 200
     assert any("GET /health" in message for message in captured)
+
+
+def test_loguru_writes_to_configured_file(tmp_path):
+    original_log_file = settings.LOG_FILE
+    original_log_level = settings.LOG_LEVEL
+    original_log_format = settings.LOG_FORMAT
+    settings.LOG_FILE = str(tmp_path / "app.log")
+    settings.LOG_LEVEL = "INFO"
+    settings.LOG_FORMAT = "json"
+    try:
+        create_application()
+        from loguru import logger
+
+        logger.info("log-test-message")
+        content = (tmp_path / "app.log").read_text(encoding="utf-8")
+        assert "log-test-message" in content
+    finally:
+        settings.LOG_FILE = original_log_file
+        settings.LOG_LEVEL = original_log_level
+        settings.LOG_FORMAT = original_log_format

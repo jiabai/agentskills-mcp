@@ -11,7 +11,6 @@ from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from mcp_agentskills.api.mcp.auth import ApiTokenVerifier
 from mcp_agentskills.api.mcp.http_handler import (
     create_http_app,
     get_http_app,
@@ -119,7 +118,7 @@ async def _authorize_mcp_request(scope: Scope, receive: Receive, send: Send) -> 
 
 def _build_fallback_app() -> Starlette:
     async def handler(_request):
-        return JSONResponse({"detail": "Unauthorized"}, status_code=401)
+        return JSONResponse(status_code=401, content=_error_payload("Unauthorized", "UNAUTHORIZED"))
 
     return Starlette(
         routes=[
@@ -159,7 +158,6 @@ async def ensure_mcp_initialized() -> None:
         await _mcp_app.async_start()
         _mcp_app.service_config.metadata["skill_dir"] = str(Path(settings.SKILL_STORAGE_PATH).resolve())
         service = MCPService(service_config=_mcp_app.service_config)
-        service.mcp.auth = ApiTokenVerifier()
         for flow in C.flow_dict.values():
             if isinstance(flow, BaseToolFlow):
                 service.integrate_tool_flow(flow)

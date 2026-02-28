@@ -5,6 +5,13 @@ import asyncio
 
 from mcp_agentskills import AgentSkillsMcpApp
 from mcp_agentskills.core.tools import LoadSkillMetadataOp, RunShellCommandOp
+from mcp_agentskills.core.utils.command_whitelist import validate_command
+
+
+def test_command_whitelist_blocks_windows_traversal():
+    allowed, message = validate_command(r"python ..\..\script.py")
+    assert allowed is False
+    assert "blocked pattern" in message.lower()
 
 
 async def main(skill_dir: str, skill_name: str, command: str):

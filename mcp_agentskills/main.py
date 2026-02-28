@@ -7,8 +7,10 @@ CLI arguments are forwarded directly to the underlying FlowLLM application.
 """
 
 import importlib
+import json
 import sys
 import types
+from datetime import datetime, timezone
 from typing import Optional, TYPE_CHECKING
 
 try:
@@ -44,6 +46,13 @@ except Exception:
             async def app(scope, _receive, send):
                 if scope["type"] != "http":
                     return
+                payload = json.dumps(
+                    {
+                        "detail": "Unauthorized",
+                        "code": "UNAUTHORIZED",
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    },
+                ).encode("utf-8")
                 await send(
                     {
                         "type": "http.response.start",
@@ -54,7 +63,7 @@ except Exception:
                 await send(
                     {
                         "type": "http.response.body",
-                        "body": b'{"detail":"Unauthorized"}',
+                        "body": payload,
                     },
                 )
 

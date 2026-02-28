@@ -18,7 +18,7 @@ from mcp_agentskills.api.mcp import (
 )
 from mcp_agentskills.api.router import api_router
 from mcp_agentskills.config.settings import settings
-from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware
+from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware, configure_loguru
 from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
 from mcp_agentskills.db.session import engine, init_db
 
@@ -54,6 +54,7 @@ async def lifespan(_application: FastAPI):
 
 
 def create_application() -> FastAPI:
+    configure_loguru()
     application = FastAPI(lifespan=lifespan, redirect_slashes=False)
     application.add_middleware(
         CORSMiddleware,
@@ -79,13 +80,7 @@ def create_application() -> FastAPI:
 
     @application.get("/health")
     async def health():
-        db_connected = await _check_db_connection()
-        status_code = 200 if db_connected else 503
-        payload = {
-            "status": "healthy" if db_connected else "unhealthy",
-            "db_connected": db_connected,
-        }
-        return JSONResponse(status_code=status_code, content=payload)
+        return JSONResponse(status_code=200, content={"status": "healthy"})
 
     @application.get("/metrics")
     async def metrics():
@@ -128,7 +123,7 @@ def create_application() -> FastAPI:
     async def validation_exception_handler(_request: Request, exc: RequestValidationError):
         return JSONResponse(
             status_code=422,
-            content=_error_payload(exc.errors(), "VALIDATION_ERROR"),
+            content=_error_payload("Validation error", "VALIDATION_ERROR"),
         )
 
     @application.exception_handler(Exception)

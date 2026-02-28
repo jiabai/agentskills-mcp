@@ -55,7 +55,11 @@ class TokenService:
             raise ValueError("Token not found")
         if not token.is_active:
             raise ValueError("Token revoked")
-        if token.expires_at and token.expires_at <= datetime.now(timezone.utc):
-            raise ValueError("Token expired")
+        if token.expires_at:
+            expires_at = token.expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if expires_at <= datetime.now(timezone.utc):
+                raise ValueError("Token expired")
         await self.token_repo.mark_used(token)
         return token

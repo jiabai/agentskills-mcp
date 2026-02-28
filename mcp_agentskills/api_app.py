@@ -18,6 +18,7 @@ from mcp_agentskills.api.mcp import (
 )
 from mcp_agentskills.api.router import api_router
 from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware
 from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
 from mcp_agentskills.db.session import engine, init_db
 
@@ -61,15 +62,12 @@ def create_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    application.add_middleware(RequestLoggingMiddleware)
     application.add_middleware(RateLimitMiddleware)
     application.add_middleware(_SlashPathMiddleware, paths={"/mcp", "/sse"})
     application.include_router(api_router, prefix="/api/v1")
     application.mount("/mcp", McpAppProxy(get_http_app))
     application.mount("/sse", McpAppProxy(get_sse_app))
-
-    @application.get("/health")
-    async def health():
-        return {"status": "healthy"}
 
     async def _check_db_connection() -> bool:
         try:
@@ -78,6 +76,16 @@ def create_application() -> FastAPI:
             return True
         except Exception:
             return False
+
+    @application.get("/health")
+    async def health():
+        db_connected = await _check_db_connection()
+        status_code = 200 if db_connected else 503
+        payload = {
+            "status": "healthy" if db_connected else "unhealthy",
+            "db_connected": db_connected,
+        }
+        return JSONResponse(status_code=status_code, content=payload)
 
     @application.get("/metrics")
     async def metrics():
@@ -121,6 +129,13 @@ def create_application() -> FastAPI:
         return JSONResponse(
             status_code=422,
             content=_error_payload(exc.errors(), "VALIDATION_ERROR"),
+        )
+
+    @application.exception_handler(Exception)
+    async def unhandled_exception_handler(_request: Request, _exc: Exception):
+        return JSONResponse(
+            status_code=500,
+            content=_error_payload("Internal Server Error", "INTERNAL_SERVER_ERROR"),
         )
 
     return application

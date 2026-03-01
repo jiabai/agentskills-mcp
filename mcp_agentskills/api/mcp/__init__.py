@@ -1,6 +1,5 @@
 import asyncio
-import re
-from collections.abc import AsyncGenerator, Callable
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,8 +8,12 @@ from starlette.applications import Starlette
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import Receive, Scope, Send
-from sqlalchemy.ext.asyncio import AsyncSession
-
+from mcp_agentskills.api.mcp.auth import (
+    ApiTokenVerifier,
+    SessionProvider,
+    reset_session_provider,
+    set_session_provider,
+)
 from mcp_agentskills.api.mcp.http_handler import (
     create_http_app,
     get_http_app,
@@ -23,19 +26,11 @@ from mcp_agentskills.api.mcp.sse_handler import (
 )
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.utils.user_context import set_current_user_id
-from mcp_agentskills.db.session import get_async_session
-from mcp_agentskills.repositories.token import TokenRepository
-from mcp_agentskills.repositories.user import UserRepository
-from mcp_agentskills.services.token import TokenService
-
 _mcp_app: Any | None = None
 _mcp_service: Any | None = None
 _initialized = False
 _init_lock = asyncio.Lock()
 _init_error: Exception | None = None
-_token_pattern = re.compile(r"^ask_live_[0-9a-f]{64}$")
-SessionProvider = Callable[[], AsyncGenerator[AsyncSession, None]]
-_session_provider: SessionProvider = get_async_session
 
 
 def _error_payload(detail: object, code: str) -> dict:
@@ -47,13 +42,11 @@ def _error_payload(detail: object, code: str) -> dict:
 
 
 def set_mcp_session_provider(provider: SessionProvider) -> None:
-    global _session_provider
-    _session_provider = provider
+    set_session_provider(provider)
 
 
 def reset_mcp_session_provider() -> None:
-    global _session_provider
-    _session_provider = get_async_session
+    reset_session_provider()
 
 
 def _extract_bearer_token(scope: Scope) -> str | None:
@@ -66,17 +59,6 @@ def _extract_bearer_token(scope: Scope) -> str | None:
                 return parts[1]
             return None
     return None
-
-
-def _map_token_error(message: str) -> str:
-    lowered = message.lower()
-    if "expired" in lowered:
-        return "TOKEN_EXPIRED"
-    if "revoked" in lowered:
-        return "TOKEN_REVOKED"
-    if "not found" in lowered:
-        return "TOKEN_NOT_FOUND"
-    return "TOKEN_NOT_FOUND"
 
 
 async def _send_error(
@@ -93,25 +75,17 @@ async def _send_error(
 
 async def _authorize_mcp_request(scope: Scope, receive: Receive, send: Send) -> bool:
     token = _extract_bearer_token(scope)
-    if not token or not _token_pattern.match(token):
+    if not token:
         await _send_error(scope, receive, send, "Invalid token format", "INVALID_TOKEN_FORMAT")
         return False
-    async for session in _session_provider():
-        token_repo = TokenRepository(session)
-        user_repo = UserRepository(session)
-        service = TokenService(token_repo, user_repo)
-        try:
-            api_token = await service.validate_token(token)
-        except ValueError as exc:
-            code = _map_token_error(str(exc))
-            await _send_error(scope, receive, send, str(exc), code)
-            return False
-        user = await user_repo.get_by_id(api_token.user_id)
-        if not user or not user.is_active:
-            await _send_error(scope, receive, send, "Token revoked", "TOKEN_REVOKED")
-            return False
-        set_current_user_id(str(user.id))
+    verifier = ApiTokenVerifier()
+    access_token, error = await verifier.verify_token_with_error(token)
+    if access_token:
         return True
+    if error:
+        code, detail = error
+        await _send_error(scope, receive, send, detail, code)
+        return False
     await _send_error(scope, receive, send, "Token not found", "TOKEN_NOT_FOUND")
     return False
 

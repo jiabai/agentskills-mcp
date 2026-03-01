@@ -80,7 +80,10 @@ def create_application() -> FastAPI:
 
     @application.get("/health")
     async def health():
-        return JSONResponse(status_code=200, content={"status": "healthy"})
+        db_connected = await _check_db_connection()
+        status_code = 200 if db_connected else 503
+        status = "healthy" if db_connected else "unhealthy"
+        return JSONResponse(status_code=status_code, content={"status": status, "db_connected": db_connected})
 
     @application.get("/metrics")
     async def metrics():

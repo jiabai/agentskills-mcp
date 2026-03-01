@@ -76,7 +76,8 @@ async def test_health_returns_minimal_payload(client):
     response = await client.get("/health")
     assert response.status_code == 200
     payload = response.json()
-    assert payload == {"status": "healthy"}
+    assert payload["status"] == "healthy"
+    assert payload["db_connected"] is True
 
 
 @pytest.mark.asyncio
@@ -99,8 +100,8 @@ async def test_health_ignores_db_failure(monkeypatch):
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as session:
         response = await session.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "healthy"}
+    assert response.status_code == 503
+    assert response.json() == {"status": "unhealthy", "db_connected": False}
 
 
 @pytest.mark.asyncio

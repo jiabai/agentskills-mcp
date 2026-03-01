@@ -48,24 +48,40 @@ def reset_session_provider() -> None:
     _session_provider = _default_session_provider
 
 
+def _map_token_error(message: str) -> str:
+    lowered = message.lower()
+    if "expired" in lowered:
+        return "TOKEN_EXPIRED"
+    if "revoked" in lowered:
+        return "TOKEN_REVOKED"
+    if "not found" in lowered:
+        return "TOKEN_NOT_FOUND"
+    return "TOKEN_NOT_FOUND"
+
+
 class ApiTokenVerifier(TokenVerifier):
     async def verify_token(self, token: str) -> AccessToken | None:
+        access_token, _ = await self.verify_token_with_error(token)
+        return access_token
+
+    async def verify_token_with_error(self, token: str) -> tuple[AccessToken | None, tuple[str, str] | None]:
         if not _token_pattern.match(token):
-            return None
+            return None, ("INVALID_TOKEN_FORMAT", "Invalid token format")
         async for session in _session_provider():
             token_repo = TokenRepository(session)
             user_repo = UserRepository(session)
             service = TokenService(token_repo, user_repo)
             try:
                 api_token = await service.validate_token(token)
-            except ValueError:
-                return None
+            except ValueError as exc:
+                code = _map_token_error(str(exc))
+                return None, (code, str(exc))
             user = await user_repo.get_by_id(api_token.user_id)
             if not user or not user.is_active:
-                return None
+                return None, ("TOKEN_REVOKED", "Token revoked")
             set_current_user_id(str(user.id))
             expires_at = None
             if api_token.expires_at:
                 expires_at = int(api_token.expires_at.replace(tzinfo=timezone.utc).timestamp())
-            return AccessToken(token=token, client_id=str(user.id), scopes=[], expires_at=expires_at)
-        return None
+            return AccessToken(token=token, client_id=str(user.id), scopes=[], expires_at=expires_at), None
+        return None, ("TOKEN_NOT_FOUND", "Token not found")

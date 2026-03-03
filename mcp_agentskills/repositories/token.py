@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from mcp_agentskills.models.token import APIToken
 from mcp_agentskills.repositories.base import BaseRepository
@@ -26,6 +26,18 @@ class TokenRepository(BaseRepository):
     async def count_by_user(self, user_id: str) -> int:
         result = await self.session.execute(
             select(func.count()).select_from(APIToken).where(APIToken.user_id == user_id),
+        )
+        return int(result.scalar_one())
+
+    async def count_available_by_user(self, user_id: str, now: datetime) -> int:
+        result = await self.session.execute(
+            select(func.count())
+            .select_from(APIToken)
+            .where(
+                APIToken.user_id == user_id,
+                APIToken.is_active.is_(True),
+                or_(APIToken.expires_at.is_(None), APIToken.expires_at > now),
+            ),
         )
         return int(result.scalar_one())
 

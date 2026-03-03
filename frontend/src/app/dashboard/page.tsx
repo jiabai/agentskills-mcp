@@ -1,11 +1,42 @@
+"use client"
+
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { ArrowUpRight, Command, FileText, KeyRound, Sparkles } from "lucide-react"
 
+import { api, type DashboardOverview } from "@/lib/api"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 
 export default function DashboardPage() {
+  const [overview, setOverview] = useState<DashboardOverview | null>(null)
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading")
+  const [error, setError] = useState<string | null>(null)
+
+  const loadOverview = async () => {
+    setStatus("loading")
+    setError(null)
+    try {
+      const data = await api.getDashboardOverview()
+      setOverview(data)
+      setStatus("ready")
+    } catch (err) {
+      setStatus("error")
+      setError(err instanceof Error ? err.message : "加载失败")
+    }
+  }
+
+  useEffect(() => {
+    loadOverview()
+  }, [])
+
+  const successRateText =
+    overview?.success_rate == null ? "—" : `${overview.success_rate.toFixed(1)}%`
+  const successRateTag = overview
+    ? `过去 ${overview.success_rate_window_hours}h · ${overview.success_rate_total} 次`
+    : "过去 24h"
+
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
@@ -22,11 +53,16 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
+      {status === "error" ? (
+        <Card>
+          <CardContent className="py-6 text-sm text-destructive">{error}</CardContent>
+        </Card>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-3">
         {[
-          { title: "活跃 Skills", value: "12", tag: "本月 +4" },
-          { title: "可用 Tokens", value: "5", tag: "即将过期 1" },
-          { title: "调用成功率", value: "99.2%", tag: "过去 24h" }
+          { title: "活跃 Skills", value: overview ? String(overview.active_skills) : "—", tag: "启用中" },
+          { title: "可用 Tokens", value: overview ? String(overview.available_tokens) : "—", tag: "未过期" },
+          { title: "调用成功率", value: successRateText, tag: successRateTag }
         ].map((item) => (
           <Card key={item.title}>
             <CardHeader>

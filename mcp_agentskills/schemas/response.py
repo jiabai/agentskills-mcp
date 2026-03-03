@@ -24,3 +24,11 @@ class TokenPair(BaseModel):
 
 class AccessTokenResponse(BaseModel):
     access_token: str
+
+
+class DashboardOverviewResponse(BaseModel):
+    active_skills: int
+    available_tokens: int
+    success_rate: float | None = None
+    success_rate_window_hours: int
+    success_rate_total: int

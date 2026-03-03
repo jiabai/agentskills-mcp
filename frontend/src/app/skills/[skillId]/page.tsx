@@ -26,6 +26,11 @@ export default function SkillDetailPage({ params }: SkillDetailProps) {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
   const [saving, setSaving] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewFile, setPreviewFile] = useState<string | null>(null)
+  const [previewContent, setPreviewContent] = useState("")
+  const [previewStatus, setPreviewStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
+  const [previewError, setPreviewError] = useState<string | null>(null)
 
   const fetchData = useCallback(async () => {
     setStatus("loading")
@@ -67,6 +72,25 @@ export default function SkillDetailPage({ params }: SkillDetailProps) {
     }
     await api.deleteSkill(skill.id)
     window.location.href = "/skills"
+  }
+
+  const handlePreview = async (file: string) => {
+    if (!skill) {
+      return
+    }
+    setPreviewOpen(true)
+    setPreviewFile(file)
+    setPreviewStatus("loading")
+    setPreviewError(null)
+    setPreviewContent("")
+    try {
+      const content = await api.getSkillFileContent(skill.id, file)
+      setPreviewContent(content)
+      setPreviewStatus("ready")
+    } catch (err) {
+      setPreviewError(err instanceof Error ? err.message : "预览失败")
+      setPreviewStatus("error")
+    }
   }
 
   return (
@@ -127,11 +151,50 @@ export default function SkillDetailPage({ params }: SkillDetailProps) {
                     {files.map((file) => (
                       <li key={file} className="flex items-center gap-2">
                         <FileText className="h-4 w-4 text-muted-foreground" />
-                        {file}
+                        <span className="flex-1 truncate">{file}</span>
+                        <Button variant="outline" size="sm" onClick={() => handlePreview(file)}>
+                          预览
+                        </Button>
                       </li>
                     ))}
                   </ul>
                 )}
+                <AlertDialog
+                  open={previewOpen}
+                  onOpenChange={(open) => {
+                    setPreviewOpen(open)
+                    if (!open) {
+                      setPreviewStatus("idle")
+                      setPreviewContent("")
+                      setPreviewError(null)
+                      setPreviewFile(null)
+                    }
+                  }}
+                >
+                  <AlertDialogContent className="max-w-4xl">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>{previewFile ? `预览 ${previewFile}` : "预览文件"}</AlertDialogTitle>
+                      <AlertDialogDescription>仅用于快速查看文本内容。</AlertDialogDescription>
+                    </AlertDialogHeader>
+                    {previewStatus === "loading" ? (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        正在加载内容
+                      </div>
+                    ) : null}
+                    {previewStatus === "error" ? (
+                      <div className="text-sm text-destructive">{previewError}</div>
+                    ) : null}
+                    {previewStatus === "ready" ? (
+                      <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap rounded-md border border-border bg-muted/40 p-4 text-xs text-foreground">
+                        {previewContent || "文件为空"}
+                      </pre>
+                    ) : null}
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>关闭</AlertDialogCancel>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </CardContent>
             </Card>
           </TabsContent>

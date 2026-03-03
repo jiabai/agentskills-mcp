@@ -5,7 +5,7 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { BarChart3, KeyRound, LayoutGrid, LogOut, ShieldCheck, Sparkles, User2, Wrench } from "lucide-react"
 
-import { getStoredTokens } from "@/lib/api"
+import { clearTokens, getStoredTokens } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
@@ -37,6 +37,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     }
     setIsChecking(false)
   }, [isAuthRoute, router])
+
+  const handleLogout = () => {
+    clearTokens()
+    router.replace("/login")
+  }
 
   if (isAuthRoute) {
     return <main className="min-h-screen">{children}</main>
@@ -85,7 +90,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-destructive">
+                    <DropdownMenuItem className="text-destructive" onSelect={handleLogout}>
                       <LogOut className="h-4 w-4" />
                       退出登录
                     </DropdownMenuItem>

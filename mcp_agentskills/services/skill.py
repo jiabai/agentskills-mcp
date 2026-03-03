@@ -83,6 +83,16 @@ class SkillService:
         skill = await self.get_skill(user, skill_id)
         return list_files(user.id, skill.name)
 
+    async def read_skill_file(self, user: User, skill_id: str, file_path: str) -> str:
+        skill = await self.get_skill(user, skill_id)
+        base_dir = Path(settings.SKILL_STORAGE_PATH)
+        safe_path = get_safe_skill_path(base_dir, user.id, skill.name, file_path)
+        if not safe_path:
+            raise ValueError("Invalid file path")
+        if not safe_path.exists() or not safe_path.is_file():
+            raise ValueError("File not found")
+        return safe_path.read_text(encoding="utf-8", errors="replace")
+
     async def upload_file(self, user: User, skill_id: str, filename: str, content: bytes) -> str:
         skill = await self.get_skill(user, skill_id)
         valid, error = validate_filename(filename)

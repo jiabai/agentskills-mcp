@@ -40,6 +40,15 @@ class SkillRepository(BaseRepository):
         result = await self.session.execute(stmt)
         return int(result.scalar_one())
 
+    async def count_active_by_user(self, user_id: str) -> int:
+        stmt = (
+            select(func.count())
+            .select_from(Skill)
+            .where(Skill.user_id == user_id, Skill.is_active.is_(True))
+        )
+        result = await self.session.execute(stmt)
+        return int(result.scalar_one())
+
     async def create(self, model: Any = Skill, **data: Any) -> Skill:
         skill = Skill(**data)
         self.session.add(skill)

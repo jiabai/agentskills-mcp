@@ -30,6 +30,14 @@ export type User = {
   username: string
 }
 
+export type DashboardOverview = {
+  active_skills: number
+  available_tokens: number
+  success_rate: number | null
+  success_rate_window_hours: number
+  success_rate_total: number
+}
+
 const storageKey = "agentskills.tokens"
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
@@ -73,6 +81,11 @@ type ApiResponse = {
   payload: unknown
 }
 
+type TextResponse = {
+  response: Response
+  text: string
+}
+
 const getDetail = (payload: unknown, fallback: string) => {
   if (payload && typeof payload === "object" && "detail" in payload) {
     const detail = (payload as { detail?: string }).detail
@@ -81,6 +94,18 @@ const getDetail = (payload: unknown, fallback: string) => {
     }
   }
   return fallback
+}
+
+const getDetailFromText = (text: string, fallback: string) => {
+  if (!text) {
+    return fallback
+  }
+  try {
+    const payload = JSON.parse(text) as unknown
+    return getDetail(payload, fallback)
+  } catch {
+    return fallback
+  }
 }
 
 const fetchJson = async (path: string, options: ApiRequestOptions = {}): Promise<ApiResponse> => {
@@ -98,6 +123,19 @@ const fetchJson = async (path: string, options: ApiRequestOptions = {}): Promise
   }
   const payload = await response.json().catch(() => ({}))
   return { response, payload }
+}
+
+const fetchText = async (path: string, options: ApiRequestOptions = {}): Promise<TextResponse> => {
+  const { skipRefresh: _skipRefresh, accessToken, ...requestOptions } = options
+  const tokens = getStoredTokens()
+  const headers = new Headers(requestOptions.headers)
+  const resolvedToken = accessToken ?? tokens?.access_token
+  if (resolvedToken) {
+    headers.set("Authorization", `Bearer ${resolvedToken}`)
+  }
+  const response = await fetch(`${apiBaseUrl}${path}`, { ...requestOptions, headers })
+  const text = await response.text().catch(() => "")
+  return { response, text }
 }
 
 const refreshTokens = async (refreshToken: string): Promise<AccessTokenResponse> => {
@@ -138,6 +176,31 @@ async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promi
   throw new Error(getDetail(payload, response.statusText))
 }
 
+async function apiFetchText(path: string, options: ApiRequestOptions = {}): Promise<string> {
+  const { response, text } = await fetchText(path, options)
+  if (response.ok) {
+    return text
+  }
+  if (response.status === 401 && !options.skipRefresh) {
+    const tokens = getStoredTokens()
+    if (tokens?.refresh_token) {
+      try {
+        const refreshed = await refreshTokens(tokens.refresh_token)
+        storeTokens({ access_token: refreshed.access_token, refresh_token: tokens.refresh_token })
+        const retry = await fetchText(path, { ...options, accessToken: refreshed.access_token, skipRefresh: true })
+        if (retry.response.ok) {
+          return retry.text
+        }
+        throw new Error(getDetailFromText(retry.text, retry.response.statusText))
+      } catch (error) {
+        clearTokens()
+        throw error
+      }
+    }
+  }
+  throw new Error(getDetailFromText(text, response.statusText))
+}
+
 export const api = {
   register: (payload: { email: string; username: string; password: string }) =>
     apiFetch("/api/v1/auth/register", { method: "POST", body: JSON.stringify(payload) }),
@@ -146,6 +209,7 @@ export const api = {
   refresh: (payload: { refresh_token: string }) =>
     apiFetch<AccessTokenResponse>("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify(payload) }),
   getMe: () => apiFetch<User>("/api/v1/users/me"),
+  getDashboardOverview: () => apiFetch<DashboardOverview>("/api/v1/dashboard/overview"),
   updateMe: (payload: { username?: string; email?: string }) =>
     apiFetch("/api/v1/users/me", { method: "PUT", body: JSON.stringify(payload) }),
   changePassword: (payload: { current_password: string; new_password: string }) =>
@@ -161,6 +225,8 @@ export const api = {
     apiFetch<Skill>(`/api/v1/skills/${skillId}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteSkill: (skillId: string) => apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" }),
   listSkillFiles: (skillId: string) => apiFetch<string[]>(`/api/v1/skills/${skillId}/files`),
+  getSkillFileContent: (skillId: string, filePath: string) =>
+    apiFetchText(`/api/v1/skills/${skillId}/files/${encodeURIComponent(filePath)}`),
   uploadSkillFile: async (skillId: string, file: File) => {
     const tokens = getStoredTokens()
     const formData = new FormData()

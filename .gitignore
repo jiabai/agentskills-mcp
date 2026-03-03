@@ -45,7 +45,9 @@ dataset/
 datasets/
 raw_data/
 processed_data/
+local-data/
 site/*
+
 
 # Node.js
 frontend/node_modules/

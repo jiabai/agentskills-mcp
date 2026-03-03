@@ -310,13 +310,7 @@ We welcome community contributions! To get started:
 pip install -e .
 ```
 
-2. Install pre-commit hooks:
-```bash
-pip install pre-commit
-pre-commit run --all-files
-```
-
-3. Submit a pull request with your changes.
+2. Submit a pull request with your changes.
 
 ---
 

@@ -269,14 +269,7 @@ python run_skill_agent.py
 pip install -e .
 ```
 
-2. 安装 pre-commit 钩子：
-
-```bash
-pip install pre-commit
-pre-commit run --all-files
-```
-
-3. 提交 Pull Request。
+2. 提交 Pull Request。
 
 ---
 

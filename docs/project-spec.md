@@ -980,7 +980,6 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 | `pytest-asyncio` | >=0.23.0 | 异步测试支持 |
 | `pytest-cov` | >=4.1.0 | 测试覆盖率 |
 | `aiosqlite` | >=0.19.0 | SQLite 异步驱动（测试用） |
-| `pre-commit` | >=3.6.0 | Git 钩子 |
 | `ruff` | >=0.1.0 | 代码格式化 |
 | `mypy` | >=1.8.0 | 类型检查 |
 
@@ -1015,7 +1014,6 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "pytest-cov>=4.1.0",
     "aiosqlite>=0.19.0",
-    "pre-commit>=3.6.0",
     "ruff>=0.1.0",
     "mypy>=1.8.0",
 ]

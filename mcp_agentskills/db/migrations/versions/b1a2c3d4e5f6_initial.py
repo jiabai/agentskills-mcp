@@ -38,7 +38,7 @@ def upgrade() -> None:
         sa.Column("description", sa.String(length=500), nullable=False, server_default=sa.text("''")),
         sa.Column("skill_dir", sa.String(length=500), nullable=False),
         sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
-        sa.UniqueConstraint("user_id", "name", name="uq_skill_user_name"),
+        sa.UniqueConstraint("user_id", "name", name="uix_user_skill_name"),
     )
     op.create_index("ix_skills_user_id", "skills", ["user_id"], unique=False)
 

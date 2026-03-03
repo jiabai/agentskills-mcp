@@ -54,6 +54,9 @@ async def lifespan(_application: FastAPI):
 
 
 def create_application() -> FastAPI:
+    def _utc_timestamp() -> str:
+        return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
     configure_loguru()
     application = FastAPI(lifespan=lifespan, redirect_slashes=False)
     application.add_middleware(
@@ -82,8 +85,11 @@ def create_application() -> FastAPI:
     async def health():
         db_connected = await _check_db_connection()
         status_code = 200 if db_connected else 503
-        status = "healthy" if db_connected else "unhealthy"
-        return JSONResponse(status_code=status_code, content={"status": status, "db_connected": db_connected})
+        status_value = "healthy" if db_connected else "unhealthy"
+        return JSONResponse(
+            status_code=status_code,
+            content={"status": status_value, "db_connected": db_connected},
+        )
 
     @application.get("/metrics")
     async def metrics():
@@ -102,7 +108,7 @@ def create_application() -> FastAPI:
         return {
             "detail": detail,
             "code": code,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": _utc_timestamp(),
         }
 
     def _code_for_status(status_code: int) -> str:

@@ -10,7 +10,7 @@ async def test_create_list_revoke_token(async_session):
     user_repo = UserRepository(async_session)
     token_repo = TokenRepository(async_session)
     token_service = TokenService(token_repo, user_repo)
-    user = await user_repo.create(email="d@example.com", username="userd", password="pass1234")
+    user = await user_repo.create(email="d_token@example.com", username="userd_token", password="pass1234")
     created = await token_service.create_token(user, name="default")
     tokens = await token_service.list_tokens(user)
     assert len(tokens) == 1

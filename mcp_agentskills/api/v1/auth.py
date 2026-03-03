@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.user import UserRepository
-from mcp_agentskills.schemas.response import TokenPair
+from mcp_agentskills.schemas.response import AccessTokenResponse, TokenPair
 from mcp_agentskills.schemas.token import TokenRefresh
 from mcp_agentskills.schemas.user import UserCreate, UserLogin, UserResponse
 from mcp_agentskills.services.auth import AuthService
@@ -38,11 +38,11 @@ async def login(payload: UserLogin, session=Depends(get_async_session)):
     return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)
 
 
-@router.post("/refresh", response_model=TokenPair)
+@router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(payload: TokenRefresh, session=Depends(get_async_session)):
     service = AuthService(UserRepository(session))
     try:
         token_pair = await service.refresh_token(payload.refresh_token)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
-    return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)
+    return AccessTokenResponse(access_token=token_pair.access_token)

@@ -11,12 +11,14 @@ from mcp_agentskills.services.token import TokenService
 async def test_mcp_http_requires_auth(client):
     response = await client.post("/mcp")
     assert response.status_code == 401
+    assert response.json()["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio
 async def test_mcp_sse_requires_auth(client):
     response = await client.get("/sse")
     assert response.status_code == 401
+    assert response.json()["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio
@@ -25,6 +27,7 @@ async def test_mcp_invalid_token_format_returns_code(client):
     assert response.status_code == 401
     payload = response.json()
     assert payload["code"] == "INVALID_TOKEN_FORMAT"
+    assert payload["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio
@@ -38,6 +41,7 @@ async def test_mcp_token_not_found_returns_code(client, async_session):
         assert response.status_code == 401
         payload = response.json()
         assert payload["code"] == "TOKEN_NOT_FOUND"
+        assert payload["timestamp"].endswith("Z")
     finally:
         reset_mcp_session_provider()
 
@@ -58,6 +62,7 @@ async def test_mcp_token_revoked_returns_code(client, async_session):
         assert response.status_code == 401
         payload = response.json()
         assert payload["code"] == "TOKEN_REVOKED"
+        assert payload["timestamp"].endswith("Z")
     finally:
         reset_mcp_session_provider()
 
@@ -78,6 +83,7 @@ async def test_mcp_token_expired_returns_code(client, async_session):
         assert response.status_code == 401
         payload = response.json()
         assert payload["code"] == "TOKEN_EXPIRED"
+        assert payload["timestamp"].endswith("Z")
     finally:
         reset_mcp_session_provider()
 

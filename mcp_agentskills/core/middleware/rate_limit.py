@@ -28,7 +28,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 payload = {
                     "detail": "Rate limit exceeded",
                     "code": "RATE_LIMIT_EXCEEDED",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 }
                 return JSONResponse(status_code=403, content=payload)
             timestamps.append(now)

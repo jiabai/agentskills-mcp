@@ -34,7 +34,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
                 content={
                     "detail": "Internal Server Error",
                     "code": "INTERNAL_SERVER_ERROR",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 },
             )
         logger.info(f"{request.method} {request.url.path} {response.status_code}")

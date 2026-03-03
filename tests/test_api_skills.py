@@ -27,10 +27,11 @@ async def test_skill_lifecycle(client, tmp_path, monkeypatch):
     assert payload["total"] == 1
     updated = await client.put(
         f"/api/v1/skills/{skill_id}",
-        json={"description": "new"},
+        json={"name": "skillx2", "description": "new"},
         headers=headers,
     )
     assert updated.status_code == 200
+    assert updated.json()["name"] == "skillx2"
     deleted = await client.delete(f"/api/v1/skills/{skill_id}", headers=headers)
     assert deleted.status_code == 204
 

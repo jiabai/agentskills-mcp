@@ -6,7 +6,7 @@ from mcp_agentskills.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixi
 
 class Skill(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "skills"
-    __table_args__ = (UniqueConstraint("user_id", "name", name="uq_skill_user_name"),)
+    __table_args__ = (UniqueConstraint("user_id", "name", name="uix_user_skill_name"),)
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     name: Mapped[str] = mapped_column(String(100))

@@ -20,3 +20,7 @@ class PaginatedResponse(BaseModel, Generic[T]):
 class TokenPair(BaseModel):
     access_token: str
     refresh_token: str
+
+
+class AccessTokenResponse(BaseModel):
+    access_token: str

@@ -24,6 +24,10 @@ async def test_register_login_refresh(client):
     refresh_token = payload["refresh_token"]
     refreshed = await client.post("/api/v1/auth/refresh", json={"refresh_token": refresh_token})
     assert refreshed.status_code == 200
+    refreshed_payload = refreshed.json()
+    assert "access_token" in refreshed_payload
+    assert "refresh_token" not in refreshed_payload
+    assert "token_type" not in refreshed_payload
 
 
 @pytest.mark.asyncio
@@ -35,6 +39,7 @@ async def test_refresh_requires_token(client):
     assert isinstance(payload["detail"], str)
     assert "code" in payload
     assert "timestamp" in payload
+    assert payload["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio
@@ -52,6 +57,7 @@ async def test_login_invalid_credentials_format(client):
     assert "detail" in payload
     assert "code" in payload
     assert "timestamp" in payload
+    assert payload["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio
@@ -69,6 +75,7 @@ async def test_rate_limit_enforced():
     settings.RATE_LIMIT_WINDOW = original_window
     assert first.status_code == 200
     assert second.status_code == 403
+    assert second.json()["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio
@@ -101,7 +108,9 @@ async def test_health_ignores_db_failure(monkeypatch):
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as session:
         response = await session.get("/health")
     assert response.status_code == 503
-    assert response.json() == {"status": "unhealthy", "db_connected": False}
+    payload = response.json()
+    assert payload["status"] == "unhealthy"
+    assert payload["db_connected"] is False
 
 
 @pytest.mark.asyncio
@@ -116,6 +125,7 @@ async def test_unhandled_exception_uses_error_format(app, client):
     assert "detail" in payload
     assert "code" in payload
     assert "timestamp" in payload
+    assert payload["timestamp"].endswith("Z")
 
 
 @pytest.mark.asyncio

@@ -50,7 +50,7 @@ except Exception:
                     {
                         "detail": "Unauthorized",
                         "code": "UNAUTHORIZED",
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                     },
                 ).encode("utf-8")
                 await send(

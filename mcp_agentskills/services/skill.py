@@ -53,6 +53,24 @@ class SkillService:
 
     async def update_skill(self, user: User, skill_id: str, **fields) -> Skill:
         skill = await self.get_skill(user, skill_id)
+        new_name = fields.get("name")
+        if new_name is None:
+            fields.pop("name", None)
+        elif new_name != skill.name:
+            valid, error = validate_skill_name(new_name)
+            if not valid:
+                raise ValueError(error)
+            existing = await self.skill_repo.get_by_name(user.id, new_name)
+            if existing and existing.id != skill.id:
+                raise ValueError("Skill already exists")
+            old_dir = get_user_skill_dir(user.id, skill.name)
+            new_dir = get_user_skill_dir(user.id, new_name)
+            if old_dir.exists():
+                new_dir.parent.mkdir(parents=True, exist_ok=True)
+                old_dir.rename(new_dir)
+            else:
+                new_dir.mkdir(parents=True, exist_ok=True)
+            fields["skill_dir"] = str(new_dir)
         return await self.skill_repo.update(skill, **fields)
 
     async def delete_skill(self, user: User, skill_id: str) -> bool:

@@ -1,6 +1,6 @@
 .vscode
 .trae
-.worktrees
+.worktrees/
 .env*
 !.env.example
 .DS_Store
@@ -25,6 +25,26 @@ build/
 **/cache/**
 *.pdf
 *.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.sqlite
+*.db
+*.duckdb
+*.pkl
+*.pickle
+*.joblib
+*.npy
+*.npz
+*.jsonl
+*.ndjson
+data/
+dataset/
+datasets/
+raw_data/
+processed_data/
 site/*
 
 # Node.js

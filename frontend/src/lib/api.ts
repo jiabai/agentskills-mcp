@@ -3,6 +3,10 @@ export type TokenPair = {
   refresh_token: string
 }
 
+export type AccessTokenResponse = {
+  access_token: string
+}
+
 export type Skill = {
   id: string
   name: string
@@ -96,7 +100,7 @@ const fetchJson = async (path: string, options: ApiRequestOptions = {}): Promise
   return { response, payload }
 }
 
-const refreshTokens = async (refreshToken: string) => {
+const refreshTokens = async (refreshToken: string): Promise<AccessTokenResponse> => {
   const { response, payload } = await fetchJson("/api/v1/auth/refresh", {
     method: "POST",
     body: JSON.stringify({ refresh_token: refreshToken }),
@@ -106,7 +110,7 @@ const refreshTokens = async (refreshToken: string) => {
   if (!response.ok) {
     throw new Error(getDetail(payload, response.statusText))
   }
-  return payload as TokenPair
+  return payload as AccessTokenResponse
 }
 
 async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
@@ -119,7 +123,7 @@ async function apiFetch<T>(path: string, options: ApiRequestOptions = {}): Promi
     if (tokens?.refresh_token) {
       try {
         const refreshed = await refreshTokens(tokens.refresh_token)
-        storeTokens(refreshed)
+        storeTokens({ access_token: refreshed.access_token, refresh_token: tokens.refresh_token })
         const retry = await fetchJson(path, { ...options, accessToken: refreshed.access_token, skipRefresh: true })
         if (retry.response.ok) {
           return retry.payload as T
@@ -140,7 +144,7 @@ export const api = {
   login: (payload: { email: string; password: string }) =>
     apiFetch<TokenPair>("/api/v1/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   refresh: (payload: { refresh_token: string }) =>
-    apiFetch<TokenPair>("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify(payload) }),
+    apiFetch<AccessTokenResponse>("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify(payload) }),
   getMe: () => apiFetch<User>("/api/v1/users/me"),
   updateMe: (payload: { username?: string; email?: string }) =>
     apiFetch("/api/v1/users/me", { method: "PUT", body: JSON.stringify(payload) }),

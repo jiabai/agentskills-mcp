@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Mail, Shield } from "lucide-react"
 
 import { api, storeTokens } from "@/lib/api"
@@ -11,6 +12,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function LoginPage() {
+  const router = useRouter()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
@@ -25,6 +27,7 @@ export default function LoginPage() {
     try {
       const tokenPair = await api.login({ email, password })
       storeTokens(tokenPair)
+      router.replace("/dashboard")
       setSuccess("登录成功，已保存凭证。")
     } catch (err) {
       setError(err instanceof Error ? err.message : "登录失败")

@@ -23,7 +23,7 @@ describe("api refresh token", () => {
     const fetchMock = vi.fn()
     fetchMock
       .mockResolvedValueOnce(createResponse(401, { detail: "Unauthorized" }))
-      .mockResolvedValueOnce(createResponse(200, { access_token: "new-access", refresh_token: "new-refresh" }))
+      .mockResolvedValueOnce(createResponse(200, { access_token: "new-access" }))
       .mockResolvedValueOnce(createResponse(200, { username: "demo", email: "demo@example.com" }))
     vi.stubGlobal("fetch", fetchMock)
 
@@ -33,7 +33,7 @@ describe("api refresh token", () => {
     const user = await api.getMe()
 
     expect(user).toEqual({ username: "demo", email: "demo@example.com" })
-    expect(getStoredTokens()).toEqual({ access_token: "new-access", refresh_token: "new-refresh" })
+    expect(getStoredTokens()).toEqual({ access_token: "new-access", refresh_token: "refresh" })
     expect(fetchMock).toHaveBeenCalledTimes(3)
   })
 

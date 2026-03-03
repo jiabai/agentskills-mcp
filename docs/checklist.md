@@ -452,7 +452,8 @@
 ### 11.2 健康检查
 
 - [x] GET `/health` 端点存在
-  - [x] 返回服务状态 `{"status": "healthy"}`
+  - [x] 返回服务状态与数据库连接状态（如 `{"status": "healthy", "db_connected": true}`）
+  - [x] 数据库不可用时返回 503
 - [x] GET `/metrics` 端点存在（可选）
   - [x] 返回数据库连接状态
   - [x] 返回磁盘使用率

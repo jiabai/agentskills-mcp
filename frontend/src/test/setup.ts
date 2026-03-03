@@ -23,6 +23,7 @@ vi.mock("@/lib/api", () => {
       revokeToken: vi.fn(async () => ({}))
     },
     storeTokens: vi.fn(),
-    clearTokens: vi.fn()
+    clearTokens: vi.fn(),
+    getStoredTokens: vi.fn(() => null)
   }
 })

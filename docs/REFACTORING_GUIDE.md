@@ -620,6 +620,7 @@ if __name__ == "__main__":
 from sqlalchemy import text
 from pathlib import Path
 import psutil
+from fastapi.responses import JSONResponse
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.db.session import engine
@@ -627,7 +628,13 @@ from mcp_agentskills.db.session import engine
 
 @app.get("/health")
 async def health_check():
-    return {"status": "healthy"}
+    db_connected = await check_db_connection()
+    status_code = 200 if db_connected else 503
+    status_value = "healthy" if db_connected else "unhealthy"
+    return JSONResponse(
+        status_code=status_code,
+        content={"status": status_value, "db_connected": db_connected},
+    )
 
 
 @app.get("/metrics")

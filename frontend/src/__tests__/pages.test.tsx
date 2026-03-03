@@ -1,4 +1,5 @@
-import { render, screen } from "@testing-library/react"
+import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { vi } from "vitest"
 
 import LoginPage from "@/app/login/page"
 import RegisterPage from "@/app/register/page"
@@ -9,12 +10,30 @@ import TokensPage from "@/app/tokens/page"
 import ProfilePage from "@/app/profile/page"
 import SecurityPage from "@/app/security/page"
 
+const replaceMock = vi.fn()
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: replaceMock }),
+  usePathname: () => "/"
+}))
+
 describe("console pages", () => {
   it("renders login form", () => {
     render(<LoginPage />)
     expect(screen.getByRole("heading", { name: "欢迎回来" })).toBeInTheDocument()
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument()
     expect(screen.getByLabelText("密码")).toBeInTheDocument()
+  })
+
+  it("redirects after login success", async () => {
+    replaceMock.mockClear()
+    render(<LoginPage />)
+    fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "user@example.com" } })
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "pass1234" } })
+    fireEvent.click(screen.getByRole("button", { name: "登录" }))
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard")
+    })
   })
 
   it("renders register form", () => {

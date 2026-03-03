@@ -1,9 +1,11 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import { BarChart3, KeyRound, LayoutGrid, LogOut, ShieldCheck, Sparkles, User2, Wrench } from "lucide-react"
 
+import { getStoredTokens } from "@/lib/api"
 import { cn } from "@/lib/utils"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Button } from "@/components/ui/button"
@@ -19,10 +21,29 @@ const navItems = [
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
+  const router = useRouter()
   const isAuthRoute = pathname === "/login" || pathname === "/register"
+  const [isChecking, setIsChecking] = useState(!isAuthRoute)
+
+  useEffect(() => {
+    if (isAuthRoute) {
+      setIsChecking(false)
+      return
+    }
+    const tokens = getStoredTokens()
+    if (!tokens?.access_token) {
+      router.replace("/login")
+      return
+    }
+    setIsChecking(false)
+  }, [isAuthRoute, router])
 
   if (isAuthRoute) {
     return <main className="min-h-screen">{children}</main>
+  }
+
+  if (isChecking) {
+    return <main className="min-h-screen" />
   }
 
   return (

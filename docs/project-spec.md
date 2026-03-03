@@ -930,6 +930,11 @@ app = create_application()
 
 前端控制台位于 `frontend/`，使用 Next.js App Router + Tailwind + shadcn/ui，提供登录、注册、Dashboard、Skills、Tokens、Profile、Security 等页面，并与后端 API 进行联调。
 
+访问流程：
+- 未登录访问任意控制台页面时自动进入 `/login`
+- `/login` 与 `/register` 页面无需鉴权
+- 登录成功后进入 Dashboard、Skills、Profile、Security 等页面
+
 启动方式：
 
 ```bash

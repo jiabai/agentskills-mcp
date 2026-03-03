@@ -97,3 +97,28 @@ def test_alembic_files_exist():
     root = Path(__file__).resolve().parents[1]
     assert (root / "alembic.ini").exists()
     assert (root / "mcp_agentskills" / "db" / "migrations" / "env.py").exists()
+
+
+@pytest.mark.asyncio
+async def test_init_db_skips_create_all_for_non_sqlite(monkeypatch):
+    from mcp_agentskills.db import session as db_session
+
+    original_database_url = db_session.settings.DATABASE_URL
+    db_session.settings.DATABASE_URL = "postgresql+asyncpg://user:pass@localhost:5432/agentskills"
+
+    class BrokenBegin:
+        async def __aenter__(self):
+            raise AssertionError("init_db should not call engine.begin for non-sqlite")
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    class BrokenEngine:
+        def begin(self):
+            return BrokenBegin()
+
+    monkeypatch.setattr(db_session, "engine", BrokenEngine())
+    try:
+        await db_session.init_db()
+    finally:
+        db_session.settings.DATABASE_URL = original_database_url

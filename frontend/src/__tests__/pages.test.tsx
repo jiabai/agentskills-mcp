@@ -9,6 +9,7 @@ import SkillDetailPage from "@/app/skills/[skillId]/page"
 import TokensPage from "@/app/tokens/page"
 import ProfilePage from "@/app/profile/page"
 import SecurityPage from "@/app/security/page"
+import { api } from "@/lib/api"
 
 const replaceMock = vi.fn()
 
@@ -41,6 +42,21 @@ describe("console pages", () => {
     expect(screen.getByRole("heading", { name: "创建账户" })).toBeInTheDocument()
     expect(screen.getByLabelText("用户名")).toBeInTheDocument()
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument()
+  })
+
+  it("redirects to login after register success", async () => {
+    replaceMock.mockClear()
+    vi.useFakeTimers()
+    render(<RegisterPage />)
+    fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "demo" } })
+    fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "demo@example.com" } })
+    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "pass1234" } })
+    fireEvent.click(screen.getByRole("button", { name: "创建账户" }))
+    await Promise.resolve()
+    expect(api.register).toHaveBeenCalled()
+    await vi.runAllTimersAsync()
+    expect(replaceMock).toHaveBeenCalledWith("/login")
+    vi.useRealTimers()
   })
 
   it("renders dashboard overview", () => {

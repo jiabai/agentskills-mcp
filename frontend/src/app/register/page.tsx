@@ -1,7 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { Sparkles } from "lucide-react"
 
 import { api } from "@/lib/api"
@@ -11,12 +12,14 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 
 export default function RegisterPage() {
+  const router = useRouter()
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -36,6 +39,27 @@ export default function RegisterPage() {
     }
   }
 
+  const handleGoToLogin = () => {
+    if (redirectTimer.current) {
+      clearTimeout(redirectTimer.current)
+    }
+    router.replace("/login")
+  }
+
+  useEffect(() => {
+    if (!success) {
+      return
+    }
+    redirectTimer.current = setTimeout(() => {
+      router.replace("/login")
+    }, 2000)
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current)
+      }
+    }
+  }, [router, success])
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto grid min-h-screen max-w-screen-xl items-center gap-10 px-6 py-12 lg:grid-cols-[0.9fr_1.1fr]">
@@ -53,6 +77,7 @@ export default function RegisterPage() {
                   placeholder="你的显示名称"
                   value={username}
                   onChange={(event) => setUsername(event.target.value)}
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -64,6 +89,7 @@ export default function RegisterPage() {
                   placeholder="you@company.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -75,6 +101,7 @@ export default function RegisterPage() {
                   placeholder="至少 8 位字符"
                   value={password}
                   onChange={(event) => setPassword(event.target.value)}
+                  disabled={isLoading}
                   required
                 />
               </div>
@@ -85,6 +112,11 @@ export default function RegisterPage() {
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading ? "正在创建..." : "创建账户"}
               </Button>
+              {success ? (
+                <Button type="button" variant="secondary" className="w-full" onClick={handleGoToLogin}>
+                  立即登录
+                </Button>
+              ) : null}
               <Link href="/login" className="text-sm text-primary hover:underline">
                 已有账户？前往登录
               </Link>

@@ -1,4 +1,6 @@
 .vscode
+.trae
+.worktrees
 .env*
 !.env.example
 .DS_Store

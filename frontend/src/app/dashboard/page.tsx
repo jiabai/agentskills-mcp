@@ -219,7 +219,7 @@ export default function DashboardPage() {
         {[
           { title: "活跃 Skills", value: overview ? String(overview.active_skills) : "—", tag: "启用中" },
           { title: "可用 Tokens", value: overview ? String(overview.available_tokens) : "—", tag: "未过期" },
-          { title: "调用成功率", value: successRateText, tag: successRateTag }
+          { title: "工具调用成功率", value: successRateText, tag: successRateTag }
         ].map((item) => (
           <Card key={item.title}>
             <CardHeader>

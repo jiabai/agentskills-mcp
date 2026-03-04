@@ -462,6 +462,24 @@ class DeprecationNotifier:
 | `/metrics/cleanup` | POST | 是（管理员） | 清理历史调用统计 |
 | `/metrics/reset-24h` | POST | 是（管理员） | 清零过去 24h 调用统计 |
 
+#### GET `/api/v1/dashboard/overview`
+
+**响应**
+
+```json
+{
+  "active_skills": 3,
+  "available_tokens": 2,
+  "success_rate": 92.3,
+  "success_rate_window_hours": 24,
+  "success_rate_total": 120
+}
+```
+
+**统计口径**
+
+- `success_rate` / `success_rate_total` 统计 tool 调用结果（按小时桶聚合）
+
 #### POST `/api/v1/dashboard/metrics/cleanup`
 
 **请求体**

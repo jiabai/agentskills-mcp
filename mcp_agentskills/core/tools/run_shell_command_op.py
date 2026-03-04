@@ -18,6 +18,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
 from mcp_agentskills.core.utils.command_whitelist import validate_command
 from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
@@ -144,63 +145,68 @@ class RunShellCommandOp(BaseAsyncToolOp):
               skill-specific files and resources
             - Environment variables from the current process are passed to the subprocess
         """
-        # Extract skill name and command from input parameters
-        skill_name = self.input_dict["skill_name"]
-        command: str = self.input_dict["command"]
-        valid, error = validate_skill_name(skill_name)
-        if not valid:
-            self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
-            return
+        exception: Exception | None = None
+        try:
+            skill_name = self.input_dict["skill_name"]
+            command: str = self.input_dict["command"]
+            valid, error = validate_skill_name(skill_name)
+            if not valid:
+                self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
+                return
 
-        skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
-        user_id = get_current_user_id()
-        work_dir = skill_dir / user_id / skill_name if user_id else skill_dir / skill_name
-        logger.info(f"🔧 run shell command: skill_name={skill_name} skill_dir={skill_dir} command={command}")
-        if not work_dir.exists():
-            self.set_output(
-                tool_error_payload(
-                    {"skill_name": skill_name, "message": "Skill directory not found"},
-                    "SKILL_DIR_NOT_FOUND",
-                ),
-            )
-            return
+            skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+            user_id = get_current_user_id()
+            work_dir = skill_dir / user_id / skill_name if user_id else skill_dir / skill_name
+            logger.info(f"🔧 run shell command: skill_name={skill_name} skill_dir={skill_dir} command={command}")
+            if not work_dir.exists():
+                self.set_output(
+                    tool_error_payload(
+                        {"skill_name": skill_name, "message": "Skill directory not found"},
+                        "SKILL_DIR_NOT_FOUND",
+                    ),
+                )
+                return
 
-        is_valid, error_msg = validate_command(command)
-        if not is_valid:
-            self.set_output(tool_error_payload(error_msg, "COMMAND_BLOCKED"))
-            return
+            is_valid, error_msg = validate_command(command)
+            if not is_valid:
+                self.set_output(tool_error_payload(error_msg, "COMMAND_BLOCKED"))
+                return
 
-        # Auto-install dependencies for Python scripts if pipreqs is available
-        # This helps ensure that Python scripts have their required dependencies
-        # Only install if auto_install_deps parameter is enabled
-        if self.auto_install_deps:
-            if "py" in command:
-                pipreqs_available = shutil.which("pipreqs") is not None
-                if pipreqs_available:
-                    install_cmd = f"cd {work_dir} && pipreqs . --force && pip install -r requirements.txt"
-                    proc = await asyncio.create_subprocess_shell(
-                        install_cmd,
-                        stdout=asyncio.subprocess.PIPE,
-                        stderr=asyncio.subprocess.PIPE,
-                    )
-                    stdout, stderr = await proc.communicate()
-                    if proc.returncode != 0:
-                        logger.warning(f"⚠️ Failed to install dependencies:\n{stdout.decode()}\n{stderr.decode()}")
+            if self.auto_install_deps:
+                if "py" in command:
+                    pipreqs_available = shutil.which("pipreqs") is not None
+                    if pipreqs_available:
+                        install_cmd = f"cd {work_dir} && pipreqs . --force && pip install -r requirements.txt"
+                        proc = await asyncio.create_subprocess_shell(
+                            install_cmd,
+                            stdout=asyncio.subprocess.PIPE,
+                            stderr=asyncio.subprocess.PIPE,
+                        )
+                        stdout, stderr = await proc.communicate()
+                        if proc.returncode != 0:
+                            logger.warning(f"⚠️ Failed to install dependencies:\n{stdout.decode()}\n{stderr.decode()}")
+                        else:
+                            logger.info(f"✅ Dependencies installed successfully.\n{stdout.decode()}\n{stderr.decode()}")
                     else:
-                        logger.info(f"✅ Dependencies installed successfully.\n{stdout.decode()}\n{stderr.decode()}")
-                else:
-                    logger.info("❗️ pipreqs not found, skipping dependency auto-install.")
+                        logger.info("❗️ pipreqs not found, skipping dependency auto-install.")
 
-        proc = await asyncio.create_subprocess_shell(
-            f"cd {work_dir} && {command}",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=os.environ.copy(),
-        )
+            proc = await asyncio.create_subprocess_shell(
+                f"cd {work_dir} && {command}",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+                env=os.environ.copy(),
+            )
 
-        # Wait for the command to complete and capture output
-        stdout, stderr = await proc.communicate()
-        # Combine stdout and stderr output, decoded as UTF-8
-        output = stdout.decode().strip() + "\n" + stderr.decode().strip()
-        logger.info(f"✅ Command executed: skill_name={skill_name} output={output}")
-        self.set_output(output)
+            stdout, stderr = await proc.communicate()
+            output = stdout.decode().strip() + "\n" + stderr.decode().strip()
+            logger.info(f"✅ Command executed: skill_name={skill_name} output={output}")
+            self.set_output(output)
+        except Exception as exc:
+            exception = exc
+            raise
+        finally:
+            await record_tool_call(
+                "run_shell_command",
+                output=getattr(self, "_output", None),
+                exception=exception,
+            )

@@ -22,6 +22,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 
@@ -160,33 +161,37 @@ class LoadSkillMetadataOp(BaseAsyncToolOp):
             included in the result. Invalid or missing metadata is logged as
             a warning but does not stop the process.
         """
-        # Get the skills directory path from service_config
-        skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
-        user_id = get_current_user_id()
-        search_dir = skill_dir / user_id if user_id else skill_dir
-        logger.info(f"🔧 Tool called: load_skill_metadata(path={search_dir})")
+        exception: Exception | None = None
+        try:
+            skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+            user_id = get_current_user_id()
+            search_dir = skill_dir / user_id if user_id else skill_dir
+            logger.info(f"🔧 Tool called: load_skill_metadata(path={search_dir})")
 
-        # Recursively find all SKILL.md files in the skills directory
-        skill_files = list(search_dir.rglob("SKILL.md"))
+            skill_files = list(search_dir.rglob("SKILL.md"))
 
-        # Add skill metadatas to agent context
-        skill_num = 0
-        skill_metadata_context = 'Available skills (each line is "- <skill_name>: <skill_description>"):'
-        for skill_file in skill_files:
-            # Read the SKILL.md file content
-            content = skill_file.read_text(encoding="utf-8")
-            # Parse metadata from the file's frontmatter
-            metadata = await self.parse_skill_metadata(content, str(skill_file))
+            skill_num = 0
+            skill_metadata_context = 'Available skills (each line is "- <skill_name>: <skill_description>"):'
+            for skill_file in skill_files:
+                content = skill_file.read_text(encoding="utf-8")
+                metadata = await self.parse_skill_metadata(content, str(skill_file))
 
-            if metadata:
-                skill_num += 1
-                # Get the parent directory of the SKILL.md file as the skill directory
-                skill_dir = skill_file.parent.as_posix()
-                name = metadata["name"]
-                description = metadata["description"]
-                skill_metadata_context += f"\n- {name}: {description}"
-                logger.info(f"✅ Loaded skill {name} metadata skill_dir={skill_dir}")
+                if metadata:
+                    skill_num += 1
+                    skill_dir = skill_file.parent.as_posix()
+                    name = metadata["name"]
+                    description = metadata["description"]
+                    skill_metadata_context += f"\n- {name}: {description}"
+                    logger.info(f"✅ Loaded skill {name} metadata skill_dir={skill_dir}")
 
-        logger.info(f"✅ Loaded {skill_num} skill metadata entries")
-        # Set the output with the complete metadata string
-        self.set_output(skill_metadata_context)
+            logger.info(f"✅ Loaded {skill_num} skill metadata entries")
+            self.set_output(skill_metadata_context)
+        except Exception as exc:
+            exception = exc
+            raise
+        finally:
+            await record_tool_call(
+                "load_skill_metadata",
+                output=getattr(self, "_output", None),
+                exception=exception,
+            )

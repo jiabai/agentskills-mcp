@@ -15,6 +15,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
 from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
@@ -107,30 +108,37 @@ class LoadSkillOp(BaseAsyncToolOp):
             - If no frontmatter is detected, the entire file content is returned
             - File encoding is assumed to be UTF-8
         """
-        # Extract skill name from input parameters
-        skill_name = self.input_dict["skill_name"]
-        valid, error = validate_skill_name(skill_name)
-        if not valid:
-            self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
-            return
-        # Look up the skill directory from the metadata dictionary
-        # This dictionary should be populated by LoadSkillMetadataOp
-        # skill_dir = Path(self.context.skill_metadata_dict[skill_name]["skill_dir"])
-        skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
-        user_id = get_current_user_id()
-        logger.info(f"🔧 Tool called: load_skill(skill_name='{skill_name}') with skill_dir={skill_dir}")
+        exception: Exception | None = None
+        try:
+            skill_name = self.input_dict["skill_name"]
+            valid, error = validate_skill_name(skill_name)
+            if not valid:
+                self.set_output(tool_error_payload(error, "INVALID_SKILL_NAME"))
+                return
+            skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
+            user_id = get_current_user_id()
+            logger.info(f"🔧 Tool called: load_skill(skill_name='{skill_name}') with skill_dir={skill_dir}")
 
-        skill_path = skill_dir / user_id / skill_name / "SKILL.md" if user_id else skill_dir / skill_name / "SKILL.md"
+            skill_path = (
+                skill_dir / user_id / skill_name / "SKILL.md" if user_id else skill_dir / skill_name / "SKILL.md"
+            )
 
-        # Check if the SKILL.md file exists
-        if not skill_path.exists():
-            payload = {"skill_name": skill_name, "message": "Skill not found"}
-            logger.exception(payload)
-            self.set_output(tool_error_payload(payload, "SKILL_NOT_FOUND"))
-            return
+            if not skill_path.exists():
+                payload = {"skill_name": skill_name, "message": "Skill not found"}
+                logger.exception(payload)
+                self.set_output(tool_error_payload(payload, "SKILL_NOT_FOUND"))
+                return
 
-        # Read the SKILL.md file content
-        content: str = skill_path.read_text(encoding="utf-8")
-        self.set_output(content)
+            content: str = skill_path.read_text(encoding="utf-8")
+            self.set_output(content)
 
-        logger.info(f"✅ Loaded skill: {skill_name} size={len(content)}")
+            logger.info(f"✅ Loaded skill: {skill_name} size={len(content)}")
+        except Exception as exc:
+            exception = exc
+            raise
+        finally:
+            await record_tool_call(
+                "load_skill",
+                output=getattr(self, "_output", None),
+                exception=exception,
+            )

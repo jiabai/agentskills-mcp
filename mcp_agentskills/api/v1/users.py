@@ -4,8 +4,9 @@ from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.core.security.password import verify_password
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.user import UserRepository
-from mcp_agentskills.schemas.user import UserDelete, UserPasswordUpdate, UserResponse, UserUpdate
+from mcp_agentskills.schemas.user import UserBindEmail, UserDelete, UserPasswordUpdate, UserResponse, UserUpdate
 from mcp_agentskills.services.user import UserService
+from mcp_agentskills.services.verification_code import get_verification_service
 
 
 router = APIRouter()
@@ -55,3 +56,20 @@ async def delete_me(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return None
+
+
+@router.post("/bind-email")
+async def bind_email(
+    payload: UserBindEmail,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    verification_service = get_verification_service()
+    verification_service.verify_code(payload.email, "bind_email", payload.code)
+    user_repo = UserRepository(session)
+    existing = await user_repo.get_by_email(payload.email)
+    if existing and existing.id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+    service = UserService(user_repo)
+    await service.update_user(current_user, email=payload.email)
+    return {"bound": True}

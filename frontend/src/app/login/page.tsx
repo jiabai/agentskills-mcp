@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Mail, Shield } from "lucide-react"
@@ -14,10 +14,42 @@ import { Label } from "@/components/ui/label"
 export default function LoginPage() {
   const router = useRouter()
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
+  const [codeMessage, setCodeMessage] = useState<string | null>(null)
+  const [resendSeconds, setResendSeconds] = useState(0)
+  const [isSending, setIsSending] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+
+  const handleSendCode = async () => {
+    if (!email || isSending || resendSeconds > 0) {
+      return
+    }
+    setIsSending(true)
+    setError(null)
+    setCodeMessage(null)
+    try {
+      const response = await api.sendVerificationCode({ email, purpose: "login" })
+      const cooldown = response.resend_interval ?? 60
+      setResendSeconds(cooldown)
+      setCodeMessage(`验证码已发送，有效期 ${response.expires_in ?? 300} 秒`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "发送验证码失败")
+    } finally {
+      setIsSending(false)
+    }
+  }
+
+  useEffect(() => {
+    if (resendSeconds <= 0) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      setResendSeconds((current) => (current > 0 ? current - 1 : 0))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [resendSeconds])
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -25,7 +57,7 @@ export default function LoginPage() {
     setError(null)
     setSuccess(null)
     try {
-      const tokenPair = await api.login({ email, password })
+      const tokenPair = await api.login({ email, code })
       storeTokens(tokenPair)
       router.replace("/dashboard")
       setSuccess("登录成功，已保存凭证。")
@@ -58,7 +90,7 @@ export default function LoginPage() {
         <Card className="border-border/80 shadow-lg">
           <CardHeader>
             <CardTitle>欢迎回来</CardTitle>
-            <CardDescription>请输入邮箱与密码继续。</CardDescription>
+            <CardDescription>请输入邮箱并验证验证码继续。</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
@@ -74,17 +106,28 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
+                <Label htmlFor="code">验证码</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="code"
+                    inputMode="numeric"
+                    placeholder="6 位验证码"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSendCode}
+                    disabled={!email || isSending || resendSeconds > 0}
+                  >
+                    {resendSeconds > 0 ? `${resendSeconds}s` : isSending ? "发送中..." : "发送验证码"}
+                  </Button>
+                </div>
               </div>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {codeMessage ? <p className="text-sm text-muted-foreground">{codeMessage}</p> : null}
               {success ? <p className="text-sm text-primary">{success}</p> : null}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">

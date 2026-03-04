@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** 访问控制台时未登录先进入登录页，避免未认证调用触发前端错误，并将流程写入文档。
+**Goal:** 访问控制台时未登录先进入登录页，避免未认证调用触发前端错误，并明确邮箱验证码登录流程。
 
-**Architecture:** 前端在 App Shell 层进行鉴权门控，检测本地 token；未登录用户被重定向到 `/login`，登录/注册页保持可访问。文档先明确流程，再按流程修复与验证。
+**Architecture:** 前端在 App Shell 层进行鉴权门控，检测本地 token；未登录用户被重定向到 `/login`，登录/注册页保持可访问。登录流程为“邮箱→验证码→确认”，注册与邮箱绑定复用同一套验证码流程。文档先明确流程，再按流程修复与验证。
 
 **Tech Stack:** Next.js App Router, React, Vitest, FastAPI
 
@@ -21,6 +21,8 @@
 - 未登录访问任意控制台页面时自动进入 `/login`
 - 登录/注册页无需鉴权
 - 登录成功后再进入 Dashboard/Skills/Profile/Security 等页面
+- 登录流程为邮箱验证码，不使用密码
+- 注册与邮箱绑定复用同一套验证码发送与校验
 
 **Step 2: 验证文档内容**
 

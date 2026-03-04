@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { vi } from "vitest"
 
 import LoginPage from "@/app/login/page"
@@ -23,14 +23,14 @@ describe("console pages", () => {
     render(<LoginPage />)
     expect(screen.getByRole("heading", { name: "欢迎回来" })).toBeInTheDocument()
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument()
-    expect(screen.getByLabelText("密码")).toBeInTheDocument()
+    expect(screen.getByLabelText("验证码")).toBeInTheDocument()
   })
 
   it("redirects after login success", async () => {
     replaceMock.mockClear()
     render(<LoginPage />)
     fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "user@example.com" } })
-    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "pass1234" } })
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "123456" } })
     fireEvent.click(screen.getByRole("button", { name: "登录" }))
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/dashboard")
@@ -42,26 +42,37 @@ describe("console pages", () => {
     expect(screen.getByRole("heading", { name: "创建账户" })).toBeInTheDocument()
     expect(screen.getByLabelText("用户名")).toBeInTheDocument()
     expect(screen.getByLabelText("邮箱")).toBeInTheDocument()
+    expect(screen.getByLabelText("验证码")).toBeInTheDocument()
   })
 
   it("redirects to login after register success", async () => {
     replaceMock.mockClear()
     vi.useFakeTimers()
-    render(<RegisterPage />)
+    await act(async () => {
+      render(<RegisterPage />)
+    })
     fireEvent.change(screen.getByLabelText("用户名"), { target: { value: "demo" } })
     fireEvent.change(screen.getByLabelText("邮箱"), { target: { value: "demo@example.com" } })
-    fireEvent.change(screen.getByLabelText("密码"), { target: { value: "pass1234" } })
-    fireEvent.click(screen.getByRole("button", { name: "创建账户" }))
-    await Promise.resolve()
+    fireEvent.change(screen.getByLabelText("验证码"), { target: { value: "123456" } })
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "创建账户" }))
+      await Promise.resolve()
+    })
     expect(api.register).toHaveBeenCalled()
-    await vi.runAllTimersAsync()
+    await act(async () => {
+      await vi.runAllTimersAsync()
+    })
     expect(replaceMock).toHaveBeenCalledWith("/login")
     vi.useRealTimers()
   })
 
-  it("renders dashboard overview", () => {
-    render(<DashboardPage />)
-    expect(screen.getByRole("heading", { name: "控制台概览" })).toBeInTheDocument()
+  it("renders dashboard overview", async () => {
+    await act(async () => {
+      render(<DashboardPage />)
+    })
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "控制台概览" })).toBeInTheDocument()
+    })
   })
 
   it("renders skills list", async () => {

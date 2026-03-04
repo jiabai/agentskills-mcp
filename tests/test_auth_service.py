@@ -13,7 +13,7 @@ async def test_register_login_refresh(async_session):
     user_repo = UserRepository(async_session)
     auth_service = AuthService(user_repo)
     user = await auth_service.register(email="a@example.com", username="usera", password="pass1234")
-    token_pair = await auth_service.login(email="a@example.com", password="pass1234")
+    token_pair = auth_service.issue_token(user)
     access_payload = decode_token(token_pair.access_token)
     refresh_payload = decode_token(token_pair.refresh_token)
     assert access_payload["sub"] == str(user.id)

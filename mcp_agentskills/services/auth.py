@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import secrets
 
 from mcp_agentskills.core.security.jwt_utils import create_access_token, create_refresh_token, decode_token
 from mcp_agentskills.core.security.password import verify_password
@@ -16,21 +17,25 @@ class AuthService:
     def __init__(self, user_repo: UserRepository):
         self.user_repo = user_repo
 
-    async def register(self, email: str, username: str, password: str) -> User:
+    async def register(self, email: str, username: str, password: str | None) -> User:
         if await self.user_repo.get_by_email(email):
             raise ValueError("Email already registered")
         if await self.user_repo.get_by_username(username):
             raise ValueError("Username already registered")
-        return await self.user_repo.create(email=email, username=username, password=password)
+        raw_password = password or secrets.token_urlsafe(24)
+        return await self.user_repo.create(email=email, username=username, password=raw_password)
+
+    def issue_token(self, user: User) -> TokenPair:
+        return TokenPair(
+            access_token=create_access_token(subject=str(user.id)),
+            refresh_token=create_refresh_token(subject=str(user.id)),
+        )
 
     async def login(self, email: str, password: str) -> TokenPair:
         user = await self.user_repo.get_by_email(email)
         if not user or not verify_password(password, user.hashed_password):
             raise ValueError("Invalid credentials")
-        return TokenPair(
-            access_token=create_access_token(subject=str(user.id)),
-            refresh_token=create_refresh_token(subject=str(user.id)),
-        )
+        return self.issue_token(user)
 
     async def refresh_token(self, refresh_token: str) -> TokenPair:
         payload = decode_token(refresh_token)
@@ -42,7 +47,4 @@ class AuthService:
         user = await self.user_repo.get_by_id(subject)
         if not user:
             raise ValueError("User not found")
-        return TokenPair(
-            access_token=create_access_token(subject=str(user.id)),
-            refresh_token=create_refresh_token(subject=str(user.id)),
-        )
+        return self.issue_token(user)

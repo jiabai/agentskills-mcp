@@ -15,11 +15,33 @@ export default function RegisterPage() {
   const router = useRouter()
   const [username, setUsername] = useState("")
   const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  const [code, setCode] = useState("")
+  const [codeMessage, setCodeMessage] = useState<string | null>(null)
+  const [resendSeconds, setResendSeconds] = useState(0)
+  const [isSending, setIsSending] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleSendCode = async () => {
+    if (!email || isSending || resendSeconds > 0) {
+      return
+    }
+    setIsSending(true)
+    setError(null)
+    setCodeMessage(null)
+    try {
+      const response = await api.sendVerificationCode({ email, purpose: "register" })
+      const cooldown = response.resend_interval ?? 60
+      setResendSeconds(cooldown)
+      setCodeMessage(`验证码已发送，有效期 ${response.expires_in ?? 300} 秒`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "发送验证码失败")
+    } finally {
+      setIsSending(false)
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -27,11 +49,11 @@ export default function RegisterPage() {
     setError(null)
     setSuccess(null)
     try {
-      await api.register({ username, email, password })
+      await api.register({ username, email, code })
       setSuccess("注册成功，请登录。")
       setUsername("")
       setEmail("")
-      setPassword("")
+      setCode("")
     } catch (err) {
       setError(err instanceof Error ? err.message : "注册失败")
     } finally {
@@ -60,13 +82,23 @@ export default function RegisterPage() {
     }
   }, [router, success])
 
+  useEffect(() => {
+    if (resendSeconds <= 0) {
+      return
+    }
+    const timer = window.setInterval(() => {
+      setResendSeconds((current) => (current > 0 ? current - 1 : 0))
+    }, 1000)
+    return () => window.clearInterval(timer)
+  }, [resendSeconds])
+
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto grid min-h-screen max-w-screen-xl items-center gap-10 px-6 py-12 lg:grid-cols-[0.9fr_1.1fr]">
         <Card className="border-border/80 shadow-lg">
           <CardHeader>
             <CardTitle>创建账户</CardTitle>
-            <CardDescription>开启你的私有 Skill 控制台。</CardDescription>
+            <CardDescription>使用邮箱验证码创建账户。</CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
             <CardContent className="space-y-4">
@@ -89,23 +121,34 @@ export default function RegisterPage() {
                   placeholder="you@company.com"
                   value={email}
                   onChange={(event) => setEmail(event.target.value)}
-                  disabled={isLoading}
+                  disabled={isLoading || isSending}
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="至少 8 位字符"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  disabled={isLoading}
-                  required
-                />
+                <Label htmlFor="code">验证码</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="code"
+                    inputMode="numeric"
+                    placeholder="6 位验证码"
+                    value={code}
+                    onChange={(event) => setCode(event.target.value)}
+                    disabled={isLoading}
+                    required
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleSendCode}
+                    disabled={!email || isSending || resendSeconds > 0}
+                  >
+                    {resendSeconds > 0 ? `${resendSeconds}s` : isSending ? "发送中..." : "发送验证码"}
+                  </Button>
+                </div>
               </div>
               {error ? <p className="text-sm text-destructive">{error}</p> : null}
+              {codeMessage ? <p className="text-sm text-muted-foreground">{codeMessage}</p> : null}
               {success ? <p className="text-sm text-primary">{success}</p> : null}
             </CardContent>
             <CardFooter className="flex flex-col gap-3">
@@ -136,7 +179,7 @@ export default function RegisterPage() {
           <div className="rounded-lg border border-border bg-muted/60 p-6">
             <ul className="space-y-3 text-sm text-muted-foreground">
               <li>独立 Skill 存储目录与授权</li>
-              <li>JWT 登录 + MCP API Token 双认证</li>
+              <li>验证码登录 + MCP API Token 双认证</li>
               <li>运行历史与可观测性指标</li>
             </ul>
           </div>

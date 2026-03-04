@@ -4,12 +4,20 @@ import pytest
 @pytest.mark.asyncio
 async def test_token_lifecycle(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "tok@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "tok@example.com", "username": "tokuser", "password": "pass1234"},
+        json={"email": "tok@example.com", "username": "tokuser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "tok@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "tok@example.com", "password": "pass1234"},
+        json={"email": "tok@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
@@ -30,12 +38,20 @@ async def test_token_lifecycle(client):
 @pytest.mark.asyncio
 async def test_token_name_max_length(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "longtok@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "longtok@example.com", "username": "longtok", "password": "pass1234"},
+        json={"email": "longtok@example.com", "username": "longtok", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "longtok@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "longtok@example.com", "password": "pass1234"},
+        json={"email": "longtok@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}

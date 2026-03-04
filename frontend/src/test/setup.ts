@@ -4,6 +4,13 @@ import { vi } from "vitest"
 vi.mock("@/lib/api", () => {
   return {
     api: {
+      sendVerificationCode: vi.fn(async () => ({
+        sent: true,
+        expires_in: 300,
+        resend_interval: 60,
+        max_attempts: 5,
+        attempts_left: 5
+      })),
       register: vi.fn(async () => ({})),
       login: vi.fn(async () => ({ access_token: "token", refresh_token: "refresh" })),
       refresh: vi.fn(async () => ({ access_token: "token", refresh_token: "refresh" })),

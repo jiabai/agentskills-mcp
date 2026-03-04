@@ -421,9 +421,145 @@ class DeprecationNotifier:
 | 端点 | 方法 | 认证 | 描述 |
 |------|------|------|------|
 | `/register` | POST | 否 | 用户注册 |
-| `/login` | POST | 否 | 用户登录，返回JWT |
+| `/login` | POST | 否 | 用户登录，返回JWT（邮箱验证码模式） |
 | `/refresh` | POST | 否（需 refresh_token） | 刷新Access Token（请求体提供 refresh_token） |
 | `/logout` | POST | 是 | 登出（可选能力，当前仓库未实现该端点；且未实现 Token 黑名单） |
+
+#### 邮箱验证码登录说明
+
+- 登录不使用密码，使用邮箱验证码完成登录
+- 注册与邮箱绑定复用同一套验证码发送与校验流程
+
+#### POST `/api/v1/auth/verification-code`
+
+**用途**
+
+- 发送验证码（登录、注册、邮箱绑定共用）
+
+**请求体**
+
+```json
+{
+  "email": "user@example.com",
+  "purpose": "login"
+}
+```
+
+**请求字段**
+
+- `email`: 邮箱地址
+- `purpose`: 业务场景，取值 `login` / `register` / `bind_email`
+
+**响应**
+
+```json
+{
+  "sent": true,
+  "expires_in": 300
+}
+```
+
+**验证码约束与字段命名**
+
+- `code_length`: 验证码长度（默认 6）
+- `expires_in`: 验证码有效期（秒，默认 300）
+- `resend_interval`: 重发间隔（秒，默认 60）
+- `max_attempts`: 单次验证码最多尝试次数（默认 5）
+- `attempts_left`: 当前剩余尝试次数
+
+**错误码示例**
+
+- `CODE_EXPIRED`：验证码过期
+- `CODE_INVALID`：验证码错误
+- `TOO_MANY_ATTEMPTS`：错误次数超限
+- `RESEND_TOO_FREQUENT`：重发过于频繁
+
+#### POST `/api/v1/auth/login`
+
+**请求体**
+
+```json
+{
+  "email": "user@example.com",
+  "code": "123456"
+}
+```
+
+**校验失败返回示例**
+
+```json
+{
+  "detail": "验证码已过期",
+  "code": "CODE_EXPIRED"
+}
+```
+
+**响应**
+
+```json
+{
+  "access_token": "jwt-access",
+  "refresh_token": "jwt-refresh"
+}
+```
+
+#### POST `/api/v1/auth/register`
+
+**请求体**
+
+```json
+{
+  "email": "user@example.com",
+  "username": "user",
+  "code": "123456"
+}
+```
+
+**校验失败返回示例**
+
+```json
+{
+  "detail": "验证码错误",
+  "code": "CODE_INVALID"
+}
+```
+
+**响应**
+
+```json
+{
+  "access_token": "jwt-access",
+  "refresh_token": "jwt-refresh"
+}
+```
+
+#### POST `/api/v1/users/bind-email`
+
+**请求体**
+
+```json
+{
+  "email": "user@example.com",
+  "code": "123456"
+}
+```
+
+**校验失败返回示例**
+
+```json
+{
+  "detail": "尝试次数过多，请稍后再试",
+  "code": "TOO_MANY_ATTEMPTS"
+}
+```
+
+**响应**
+
+```json
+{
+  "bound": true
+}
+```
 
 ### 4.2 用户模块 `/api/v1/users`
 

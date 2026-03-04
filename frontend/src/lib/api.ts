@@ -52,6 +52,14 @@ export type MetricsReset24hResponse = {
   window_end: string
 }
 
+export type VerificationCodeResponse = {
+  sent: boolean
+  expires_in?: number
+  resend_interval?: number
+  max_attempts?: number
+  attempts_left?: number
+}
+
 const storageKey = "agentskills.tokens"
 
 const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
@@ -216,9 +224,14 @@ async function apiFetchText(path: string, options: ApiRequestOptions = {}): Prom
 }
 
 export const api = {
-  register: (payload: { email: string; username: string; password: string }) =>
+  sendVerificationCode: (payload: { email: string; purpose: "login" | "register" | "bind_email" }) =>
+    apiFetch<VerificationCodeResponse>("/api/v1/auth/verification-code", {
+      method: "POST",
+      body: JSON.stringify(payload)
+    }),
+  register: (payload: { email: string; username: string; code: string }) =>
     apiFetch("/api/v1/auth/register", { method: "POST", body: JSON.stringify(payload) }),
-  login: (payload: { email: string; password: string }) =>
+  login: (payload: { email: string; code: string }) =>
     apiFetch<TokenPair>("/api/v1/auth/login", { method: "POST", body: JSON.stringify(payload) }),
   refresh: (payload: { refresh_token: string }) =>
     apiFetch<AccessTokenResponse>("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify(payload) }),

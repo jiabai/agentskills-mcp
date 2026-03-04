@@ -10,12 +10,20 @@ from mcp_agentskills.repositories.user import UserRepository
 @pytest.mark.asyncio
 async def test_metrics_cleanup_requires_superuser(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "basic@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "basic@example.com", "username": "basic", "password": "pass1234"},
+        json={"email": "basic@example.com", "username": "basic", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "basic@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "basic@example.com", "password": "pass1234"},
+        json={"email": "basic@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     response = await client.post(
@@ -29,12 +37,20 @@ async def test_metrics_cleanup_requires_superuser(client):
 @pytest.mark.asyncio
 async def test_metrics_cleanup_removes_old_metrics(client, async_session):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "admin@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "admin@example.com", "username": "admin", "password": "pass1234"},
+        json={"email": "admin@example.com", "username": "admin", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "admin@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "admin@example.com", "password": "pass1234"},
+        json={"email": "admin@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
 

@@ -7,12 +7,20 @@ from mcp_agentskills.models.request_metric import RequestMetric
 @pytest.mark.asyncio
 async def test_dashboard_overview_zero_when_no_metrics(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "dash@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "dash@example.com", "username": "dashuser", "password": "pass1234"},
+        json={"email": "dash@example.com", "username": "dashuser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "dash@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "dash@example.com", "password": "pass1234"},
+        json={"email": "dash@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
@@ -26,12 +34,20 @@ async def test_dashboard_overview_zero_when_no_metrics(client):
 @pytest.mark.asyncio
 async def test_dashboard_overview_aggregates_persisted_metrics(client, async_session):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "dash2@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "dash2@example.com", "username": "dashuser2", "password": "pass1234"},
+        json={"email": "dash2@example.com", "username": "dashuser2", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "dash2@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "dash2@example.com", "password": "pass1234"},
+        json={"email": "dash2@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}

@@ -6,10 +6,14 @@ from mcp_agentskills.schemas.user import (
     UserDelete,
     UserInDB,
     UserLogin,
+    UserLoginCode,
+    UserRegisterCode,
+    UserBindEmail,
     UserPasswordUpdate,
     UserResponse,
     UserUpdate,
 )
+from mcp_agentskills.schemas.verification import VerificationCodeRequest, VerificationCodeResponse
 from mcp_agentskills.schemas.metrics import MetricsCleanupRequest, MetricsCleanupResponse
 from mcp_agentskills.schemas.metrics_reset import MetricsReset24hResponse
 
@@ -19,6 +23,9 @@ __all__ = [
     "TokenPair",
     "UserCreate",
     "UserLogin",
+    "UserLoginCode",
+    "UserRegisterCode",
+    "UserBindEmail",
     "UserDelete",
     "UserInDB",
     "UserPasswordUpdate",
@@ -35,4 +42,6 @@ __all__ = [
     "MetricsCleanupRequest",
     "MetricsCleanupResponse",
     "MetricsReset24hResponse",
+    "VerificationCodeRequest",
+    "VerificationCodeResponse",
 ]

@@ -5,12 +5,20 @@ import pytest
 async def test_skill_lifecycle(client, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "skill@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "skill@example.com", "username": "skilluser", "password": "pass1234"},
+        json={"email": "skill@example.com", "username": "skilluser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "skill@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "skill@example.com", "password": "pass1234"},
+        json={"email": "skill@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
@@ -39,12 +47,20 @@ async def test_skill_lifecycle(client, tmp_path, monkeypatch):
 @pytest.mark.asyncio
 async def test_skill_name_max_length(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "longskill@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "longskill@example.com", "username": "longskill", "password": "pass1234"},
+        json={"email": "longskill@example.com", "username": "longskill", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "longskill@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "longskill@example.com", "password": "pass1234"},
+        json={"email": "longskill@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
@@ -61,12 +77,20 @@ async def test_skill_name_max_length(client):
 async def test_skill_upload_and_list_files(client, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "upload@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "upload@example.com", "username": "uploaduser", "password": "pass1234"},
+        json={"email": "upload@example.com", "username": "uploaduser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "upload@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "upload@example.com", "password": "pass1234"},
+        json={"email": "upload@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}

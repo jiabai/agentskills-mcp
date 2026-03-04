@@ -7,14 +7,22 @@ from mcp_agentskills.config.settings import settings
 
 @pytest.mark.asyncio
 async def test_register_login_refresh(client):
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "api@example.com", "purpose": "register"},
+    )
     register = await client.post(
         "/api/v1/auth/register",
-        json={"email": "api@example.com", "username": "apiuser", "password": "pass1234"},
+        json={"email": "api@example.com", "username": "apiuser", "code": "123456"},
     )
     assert register.status_code == 201
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "api@example.com", "purpose": "login"},
+    )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "api@example.com", "password": "pass1234"},
+        json={"email": "api@example.com", "code": "123456"},
     )
     assert login.status_code == 200
     payload = login.json()
@@ -43,14 +51,37 @@ async def test_refresh_requires_token(client):
 
 
 @pytest.mark.asyncio
+async def test_verification_code_response_contains_limits(client):
+    response = await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "code@example.com", "purpose": "login"},
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["sent"] is True
+    assert payload["expires_in"] > 0
+    assert payload["resend_interval"] > 0
+    assert payload["max_attempts"] > 0
+    assert payload["attempts_left"] == payload["max_attempts"]
+
+
+@pytest.mark.asyncio
 async def test_login_invalid_credentials_format(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "bad@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "bad@example.com", "username": "baduser", "password": "pass1234"},
+        json={"email": "bad@example.com", "username": "baduser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "bad@example.com", "purpose": "login"},
     )
     response = await client.post(
         "/api/v1/auth/login",
-        json={"email": "bad@example.com", "password": "wrong"},
+        json={"email": "bad@example.com", "code": "000000"},
     )
     assert response.status_code == 401
     payload = response.json()

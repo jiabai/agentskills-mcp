@@ -14,6 +14,22 @@ class UserLogin(BaseModel):
     password: str
 
 
+class UserRegisterCode(BaseModel):
+    email: EmailStr
+    username: str = Field(min_length=2, max_length=64)
+    code: str = Field(min_length=4, max_length=12)
+
+
+class UserLoginCode(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=12)
+
+
+class UserBindEmail(BaseModel):
+    email: EmailStr
+    code: str = Field(min_length=4, max_length=12)
+
+
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     username: str | None = Field(default=None, min_length=2, max_length=64)

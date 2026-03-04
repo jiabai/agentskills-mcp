@@ -10,6 +10,8 @@ from mcp_agentskills.schemas.user import (
     UserResponse,
     UserUpdate,
 )
+from mcp_agentskills.schemas.metrics import MetricsCleanupRequest, MetricsCleanupResponse
+from mcp_agentskills.schemas.metrics_reset import MetricsReset24hResponse
 
 __all__ = [
     "ErrorResponse",
@@ -30,4 +32,7 @@ __all__ = [
     "TokenResponse",
     "TokenRefresh",
     "TokenListResponse",
+    "MetricsCleanupRequest",
+    "MetricsCleanupResponse",
+    "MetricsReset24hResponse",
 ]

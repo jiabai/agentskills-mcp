@@ -454,7 +454,59 @@ class DeprecationNotifier:
 | `/upload` | POST | 是 | 上传Skill文件（multipart） |
 | `/{skill_id}/files` | GET | 是 | 列出Skill文件 |
 
-### 4.5 MCP模块
+### 4.5 Dashboard模块 `/api/v1/dashboard`
+
+| 端点 | 方法 | 认证 | 描述 |
+|------|------|------|------|
+| `/overview` | GET | 是 | 获取控制台概览统计 |
+| `/metrics/cleanup` | POST | 是（管理员） | 清理历史调用统计 |
+| `/metrics/reset-24h` | POST | 是（管理员） | 清零过去 24h 调用统计 |
+
+#### POST `/api/v1/dashboard/metrics/cleanup`
+
+**请求体**
+
+```json
+{
+  "retention_days": 30
+}
+```
+
+- `retention_days` 可选，范围 1–3650，省略时使用服务端配置 `METRICS_RETENTION_DAYS`
+- 清理范围为历史聚合桶数据（`request_metrics`），清理过小的保留天数可能影响“过去 24h”窗口边界的数据展示
+
+**响应**
+
+```json
+{
+  "removed": 120,
+  "retention_days": 30,
+  "cutoff": "2026-03-04T05:00:00Z"
+}
+```
+
+**权限说明**
+
+- 仅 `is_superuser=true` 的用户可调用，非管理员返回 403
+
+#### POST `/api/v1/dashboard/metrics/reset-24h`
+
+**响应**
+
+```json
+{
+  "removed": 42,
+  "window_hours": 24,
+  "window_start": "2026-03-03T05:00:00Z",
+  "window_end": "2026-03-04T05:00:00Z"
+}
+```
+
+**权限说明**
+
+- 仅 `is_superuser=true` 的用户可调用，非管理员返回 403
+
+### 4.6 MCP模块
 
 | 端点 | 方法 | 认证 | 描述 |
 |------|------|------|------|

@@ -1,12 +1,15 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.auth import get_current_active_user
-from mcp_agentskills.core.middleware.logging import get_success_rate
 from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.request_metric import RequestMetricRepository
 from mcp_agentskills.repositories.skill import SkillRepository
 from mcp_agentskills.repositories.token import TokenRepository
+from mcp_agentskills.schemas.metrics import MetricsCleanupRequest, MetricsCleanupResponse
+from mcp_agentskills.schemas.metrics_reset import MetricsReset24hResponse
 from mcp_agentskills.schemas.response import DashboardOverviewResponse
 
 
@@ -20,13 +23,63 @@ async def get_dashboard_overview(
 ):
     skill_repo = SkillRepository(session)
     token_repo = TokenRepository(session)
+    metric_repo = RequestMetricRepository(session)
     active_skills = await skill_repo.count_active_by_user(current_user.id)
     available_tokens = await token_repo.count_available_by_user(current_user.id, datetime.now(timezone.utc))
-    success_rate, total = await get_success_rate(str(current_user.id))
+    window_end = datetime.now(timezone.utc)
+    window_start = window_end - timedelta(hours=24)
+    total, success = await metric_repo.aggregate_window(str(current_user.id), window_start, window_end)
+    success_rate = 0 if total == 0 else success / total * 100
     return DashboardOverviewResponse(
         active_skills=active_skills,
         available_tokens=available_tokens,
         success_rate=success_rate,
         success_rate_window_hours=24,
         success_rate_total=total,
+    )
+
+
+@router.post("/metrics/cleanup", response_model=MetricsCleanupResponse)
+async def cleanup_metrics(
+    payload: MetricsCleanupRequest | None = None,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    retention_days = (
+        payload.retention_days
+        if payload and payload.retention_days is not None
+        else settings.METRICS_RETENTION_DAYS
+    )
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=retention_days)
+    metric_repo = RequestMetricRepository(session)
+    removed = await metric_repo.cleanup_before(cutoff)
+    cutoff_text = cutoff.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return MetricsCleanupResponse(
+        removed=removed,
+        retention_days=retention_days,
+        cutoff=cutoff_text,
+    )
+
+
+@router.post("/metrics/reset-24h", response_model=MetricsReset24hResponse)
+async def reset_metrics_24h(
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    if not current_user.is_superuser:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
+    window_end = datetime.now(timezone.utc)
+    window_start = window_end - timedelta(hours=24)
+    metric_repo = RequestMetricRepository(session)
+    removed = await metric_repo.delete_window(str(current_user.id), window_start, window_end)
+    window_start_text = window_start.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    window_end_text = window_end.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return MetricsReset24hResponse(
+        removed=removed,
+        window_hours=24,
+        window_start=window_start_text,
+        window_end=window_end_text,
     )

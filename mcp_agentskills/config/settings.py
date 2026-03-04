@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
 
+    METRICS_RETENTION_DAYS: int = 90
+
     FLOW_LLM_API_KEY: str = ""
     FLOW_LLM_BASE_URL: str = ""
 
@@ -81,6 +83,15 @@ class Settings(BaseSettings):
             raise ValueError(f"{field_name} 必须至少为 1 秒")
         if v > 3600:
             raise ValueError(f"{field_name} 不能超过 3600 秒")
+        return v
+
+    @field_validator("METRICS_RETENTION_DAYS")
+    @classmethod
+    def validate_metrics_retention_days(cls, v):
+        if v < 1:
+            raise ValueError("METRICS_RETENTION_DAYS 必须至少为 1 天")
+        if v > 3650:
+            raise ValueError("METRICS_RETENTION_DAYS 不能超过 3650 天")
         return v
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)

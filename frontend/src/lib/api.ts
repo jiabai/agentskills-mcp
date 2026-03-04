@@ -28,6 +28,7 @@ export type User = {
   id?: string
   email: string
   username: string
+  is_superuser?: boolean
 }
 
 export type DashboardOverview = {
@@ -36,6 +37,19 @@ export type DashboardOverview = {
   success_rate: number | null
   success_rate_window_hours: number
   success_rate_total: number
+}
+
+export type MetricsCleanupResponse = {
+  removed: number
+  retention_days: number
+  cutoff: string
+}
+
+export type MetricsReset24hResponse = {
+  removed: number
+  window_hours: number
+  window_start: string
+  window_end: string
 }
 
 const storageKey = "agentskills.tokens"
@@ -210,6 +224,16 @@ export const api = {
     apiFetch<AccessTokenResponse>("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify(payload) }),
   getMe: () => apiFetch<User>("/api/v1/users/me"),
   getDashboardOverview: () => apiFetch<DashboardOverview>("/api/v1/dashboard/overview"),
+  cleanupMetrics: (payload?: { retention_days?: number | null }) =>
+    apiFetch<MetricsCleanupResponse>("/api/v1/dashboard/metrics/cleanup", {
+      method: "POST",
+      body: JSON.stringify(payload ?? {})
+    }),
+  resetMetrics24h: () =>
+    apiFetch<MetricsReset24hResponse>("/api/v1/dashboard/metrics/reset-24h", {
+      method: "POST",
+      body: JSON.stringify({})
+    }),
   updateMe: (payload: { username?: string; email?: string }) =>
     apiFetch("/api/v1/users/me", { method: "PUT", body: JSON.stringify(payload) }),
   changePassword: (payload: { current_password: string; new_password: string }) =>

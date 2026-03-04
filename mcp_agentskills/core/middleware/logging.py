@@ -1,8 +1,5 @@
-from collections import deque
-import asyncio
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import sys
-import time
 from pathlib import Path
 
 from fastapi import Request
@@ -12,17 +9,17 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.security.jwt_utils import decode_token
+from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.request_metric import RequestMetricRepository
 
 
 _REQUEST_WINDOW_SECONDS = 24 * 60 * 60
-_request_history: dict[str, deque[tuple[float, bool]]] = {}
-_request_lock = asyncio.Lock()
-
-
 def _should_track_request(path: str) -> bool:
     if not path.startswith("/api/v1"):
         return False
     if path.startswith("/api/v1/auth"):
+        return False
+    if path.startswith("/api/v1/dashboard/metrics/"):
         return False
     return True
 
@@ -49,30 +46,26 @@ def _extract_user_id(request: Request) -> str | None:
 
 
 async def record_request(user_id: str, status_code: int) -> None:
-    now = time.time()
-    cutoff = now - _REQUEST_WINDOW_SECONDS
-    async with _request_lock:
-        history = _request_history.setdefault(user_id, deque())
-        history.append((now, status_code < 400))
-        while history and history[0][0] < cutoff:
-            history.popleft()
+    bucket_start = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    try:
+        async for session in get_async_session():
+            repo = RequestMetricRepository(session)
+            await repo.upsert_hour_bucket(user_id, bucket_start, status_code < 400)
+    except Exception:
+        logger.warning("request_metrics_write_failed")
 
 
 async def get_success_rate(user_id: str, window_seconds: int = _REQUEST_WINDOW_SECONDS) -> tuple[float | None, int]:
-    now = time.time()
-    cutoff = now - window_seconds
-    async with _request_lock:
-        history = _request_history.get(user_id)
-        if not history:
-            return None, 0
-        while history and history[0][0] < cutoff:
-            history.popleft()
-        total = len(history)
+    window_end = datetime.now(timezone.utc)
+    window_start = window_end - timedelta(seconds=window_seconds)
+    async for session in get_async_session():
+        repo = RequestMetricRepository(session)
+        total, success = await repo.aggregate_window(user_id, window_start, window_end)
         if total == 0:
-            return None, 0
-        success = sum(1 for _, ok in history if ok)
+            return 0, 0
         rate = success / total * 100
         return rate, total
+    return 0, 0
 
 
 def configure_loguru() -> None:

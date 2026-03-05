@@ -12,6 +12,8 @@ class SkillVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     version: Mapped[str] = mapped_column(String(50))
     description: Mapped[str] = mapped_column(String(500), default="")
     dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)
+    dependency_spec: Mapped[dict] = mapped_column(JSON, default=dict)
+    dependency_spec_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
     metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
 
     skill = relationship("Skill")

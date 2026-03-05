@@ -7,6 +7,8 @@ class SkillVersionResponse(BaseModel):
     version: str
     description: str
     dependencies: list[str]
+    dependency_spec: dict | None = None
+    dependency_spec_version: str | None = None
     metadata: dict = Field(alias="metadata_json")
     created_at: datetime
 

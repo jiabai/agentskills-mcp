@@ -1,4 +1,5 @@
 import asyncio
+import json
 import importlib.util
 import sys
 from pathlib import Path
@@ -15,7 +16,7 @@ def load_module(module_name: str, module_path: Path):
     return module
 
 
-def install_flowllm_stubs(skill_dir: Path):
+def install_flowllm_stubs(skill_dir: Path, monkeypatch):
     flowllm_module = ModuleType("flowllm")
     flowllm_core = ModuleType("flowllm.core")
     flowllm_context: Any = ModuleType("flowllm.core.context")
@@ -55,29 +56,73 @@ def install_flowllm_stubs(skill_dir: Path):
     flowllm_op.BaseAsyncToolOp = BaseAsyncToolOp
     flowllm_schema.ToolCall = ToolCall
 
-    sys.modules["flowllm"] = flowllm_module
-    sys.modules["flowllm.core"] = flowllm_core
-    sys.modules["flowllm.core.context"] = flowllm_context
-    sys.modules["flowllm.core.op"] = flowllm_op
-    sys.modules["flowllm.core.schema"] = flowllm_schema
+    monkeypatch.setitem(sys.modules, "flowllm", flowllm_module)
+    monkeypatch.setitem(sys.modules, "flowllm.core", flowllm_core)
+    monkeypatch.setitem(sys.modules, "flowllm.core.context", flowllm_context)
+    monkeypatch.setitem(sys.modules, "flowllm.core.op", flowllm_op)
+    monkeypatch.setitem(sys.modules, "flowllm.core.schema", flowllm_schema)
 
     return flowllm_context.C
 
 
-def install_mcp_package_stubs(user_context_module, command_whitelist_module=None):
+def install_mcp_package_stubs(monkeypatch, user_context_module, command_whitelist_module=None, skill_status=None):
     mcp_agentskills = ModuleType("mcp_agentskills")
     mcp_agentskills.__path__ = []
     mcp_core = ModuleType("mcp_agentskills.core")
     mcp_core.__path__ = []
     mcp_utils = ModuleType("mcp_agentskills.core.utils")
     mcp_utils.__path__ = []
+    mcp_metrics = ModuleType("mcp_agentskills.core.metrics")
+    mcp_metrics.__path__ = []
+    mcp_metrics_tool_call = ModuleType("mcp_agentskills.core.metrics.tool_call_metrics")
+    mcp_db = ModuleType("mcp_agentskills.db")
+    mcp_db.__path__ = []
+    mcp_db_session = ModuleType("mcp_agentskills.db.session")
+    mcp_repositories = ModuleType("mcp_agentskills.repositories")
+    mcp_repositories.__path__ = []
+    mcp_repositories_skill = ModuleType("mcp_agentskills.repositories.skill")
 
-    sys.modules["mcp_agentskills"] = mcp_agentskills
-    sys.modules["mcp_agentskills.core"] = mcp_core
-    sys.modules["mcp_agentskills.core.utils"] = mcp_utils
-    sys.modules["mcp_agentskills.core.utils.user_context"] = user_context_module
+    monkeypatch.setitem(sys.modules, "mcp_agentskills", mcp_agentskills)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.core", mcp_core)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.core.utils", mcp_utils)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.core.utils.user_context", user_context_module)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.core.metrics", mcp_metrics)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.core.metrics.tool_call_metrics", mcp_metrics_tool_call)
     if command_whitelist_module:
-        sys.modules["mcp_agentskills.core.utils.command_whitelist"] = command_whitelist_module
+        monkeypatch.setitem(sys.modules, "mcp_agentskills.core.utils.command_whitelist", command_whitelist_module)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.db", mcp_db)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.db.session", mcp_db_session)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.repositories", mcp_repositories)
+    monkeypatch.setitem(sys.modules, "mcp_agentskills.repositories.skill", mcp_repositories_skill)
+
+    status_map = skill_status or {}
+
+    class SkillRecord:
+        def __init__(self, is_active: bool):
+            self.is_active = is_active
+
+    class SkillRepository:
+        def __init__(self, _session):
+            self._session = _session
+
+        async def get_by_name(self, user_id: str, name: str):
+            active = status_map.get((user_id, name))
+            if active is None:
+                return None
+            return SkillRecord(is_active=active)
+
+    async def get_async_session():
+        class DummySession:
+            pass
+
+        yield DummySession()
+
+    mcp_db_session.get_async_session = get_async_session
+    mcp_repositories_skill.SkillRepository = SkillRepository
+    async def record_tool_call(*_args, **_kwargs):
+        return None
+
+    mcp_metrics_tool_call.record_tool_call = record_tool_call
 
 
 def write_skill(base: Path, skill_name: str, description: str, body: str):
@@ -97,11 +142,11 @@ def load_command_whitelist():
     return load_module("mcp_agentskills.core.utils.command_whitelist", module_path)
 
 
-def test_load_skill_metadata_scopes_by_user_id(tmp_path):
+def test_load_skill_metadata_scopes_by_user_id(tmp_path, monkeypatch):
     user_context = load_user_context()
     command_whitelist = load_command_whitelist()
-    install_mcp_package_stubs(user_context, command_whitelist)
-    install_flowllm_stubs(tmp_path)
+    install_mcp_package_stubs(monkeypatch, user_context, command_whitelist)
+    install_flowllm_stubs(tmp_path, monkeypatch)
 
     write_skill(tmp_path, "global_skill", "global", "global body")
     write_skill(tmp_path / "user-1", "user_skill", "user", "user body")
@@ -123,11 +168,11 @@ def test_load_skill_metadata_scopes_by_user_id(tmp_path):
     assert "global_skill" in op._output
 
 
-def test_load_skill_scopes_by_user_id(tmp_path):
+def test_load_skill_scopes_by_user_id(tmp_path, monkeypatch):
     user_context = load_user_context()
     command_whitelist = load_command_whitelist()
-    install_mcp_package_stubs(user_context, command_whitelist)
-    install_flowllm_stubs(tmp_path)
+    install_mcp_package_stubs(monkeypatch, user_context, command_whitelist)
+    install_flowllm_stubs(tmp_path, monkeypatch)
 
     write_skill(tmp_path, "shared_skill", "global", "global body")
     write_skill(tmp_path / "user-2", "shared_skill", "user", "user body")
@@ -148,11 +193,36 @@ def test_load_skill_scopes_by_user_id(tmp_path):
     assert "global body" in op._output
 
 
-def test_read_reference_file_scopes_by_user_id(tmp_path):
+def test_load_skill_blocks_deactivated(tmp_path, monkeypatch):
     user_context = load_user_context()
     command_whitelist = load_command_whitelist()
-    install_mcp_package_stubs(user_context, command_whitelist)
-    install_flowllm_stubs(tmp_path)
+    install_mcp_package_stubs(
+        monkeypatch,
+        user_context,
+        command_whitelist,
+        {("user-9", "blocked_skill"): False},
+    )
+    install_flowllm_stubs(tmp_path, monkeypatch)
+
+    write_skill(tmp_path / "user-9", "blocked_skill", "user", "blocked body")
+
+    module_path = Path(__file__).resolve().parents[1] / "mcp_agentskills" / "core" / "tools" / "load_skill_op.py"
+    module = load_module("mcp_agentskills.core.tools.load_skill_op", module_path)
+
+    user_context.set_current_user_id("user-9")
+    op = module.LoadSkillOp()
+    op.input_dict = {"skill_name": "blocked_skill"}
+    asyncio.run(op.async_execute())
+    payload = json.loads(op._output)
+    assert payload["code"] == "SKILL_DEACTIVATED"
+    assert payload["timestamp"].endswith("Z")
+
+
+def test_read_reference_file_scopes_by_user_id(tmp_path, monkeypatch):
+    user_context = load_user_context()
+    command_whitelist = load_command_whitelist()
+    install_mcp_package_stubs(monkeypatch, user_context, command_whitelist)
+    install_flowllm_stubs(tmp_path, monkeypatch)
 
     write_skill(tmp_path, "skill_x", "global", "global body")
     write_skill(tmp_path / "user-3", "skill_x", "user", "user body")
@@ -178,11 +248,11 @@ def test_read_reference_file_scopes_by_user_id(tmp_path):
     assert op._output == "global ref"
 
 
-def test_run_shell_command_uses_user_scoped_workdir(tmp_path):
+def test_run_shell_command_uses_user_scoped_workdir(tmp_path, monkeypatch):
     user_context = load_user_context()
     command_whitelist = load_command_whitelist()
-    install_mcp_package_stubs(user_context, command_whitelist)
-    install_flowllm_stubs(tmp_path)
+    install_mcp_package_stubs(monkeypatch, user_context, command_whitelist)
+    install_flowllm_stubs(tmp_path, monkeypatch)
 
     write_skill(tmp_path, "skill_cmd", "global", "global body")
     write_skill(tmp_path / "user-4", "skill_cmd", "user", "user body")

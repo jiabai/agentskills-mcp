@@ -6,6 +6,9 @@ class SkillInstallInstructionsResponse(BaseModel):
     dependencies: list[str]
     requirements_text: str
     commands: list[str]
+    ecosystem: str | None = None
+    manifests: dict | None = None
+    dependency_spec: dict | None = None
 
 
 class SkillVersionDiffFile(BaseModel):

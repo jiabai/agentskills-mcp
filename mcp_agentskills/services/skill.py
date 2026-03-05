@@ -109,10 +109,12 @@ class SkillService:
 
     async def list_skill_files(self, user: User, skill_id: str) -> list[str]:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_active(skill)
         return list_files(user.id, skill.name)
 
     async def read_skill_file(self, user: User, skill_id: str, file_path: str) -> str:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_active(skill)
         base_dir = Path(settings.SKILL_STORAGE_PATH)
         safe_path = get_safe_skill_path(base_dir, user.id, skill.name, file_path)
         if not safe_path:
@@ -153,6 +155,11 @@ class SkillService:
         return self.version_repo
 
     @staticmethod
+    def _ensure_active(skill: Skill) -> None:
+        if not skill.is_active:
+            raise ValueError("SKILL_DEACTIVATED")
+
+    @staticmethod
     def _parse_frontmatter(content: str) -> dict:
         parts = content.split("---")
         if len(parts) < 3:
@@ -171,6 +178,11 @@ class SkillService:
                     value = value[1:-1]
                 deps = [item.strip().strip("\"'") for item in value.split(",") if item.strip()]
                 metadata[key] = deps
+            elif key == "dependency_spec":
+                try:
+                    metadata[key] = json.loads(value)
+                except Exception:
+                    metadata[key] = value
             else:
                 metadata[key] = value
         return metadata
@@ -200,6 +212,54 @@ class SkillService:
             return [item.strip() for item in value.split(",") if item.strip()]
         return []
 
+    @staticmethod
+    def _parse_requirements_text(text: str) -> list[str]:
+        items: list[str] = []
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            items.append(stripped)
+        return items
+
+    @staticmethod
+    def _normalize_dependency_spec(value: object) -> dict | None:
+        if isinstance(value, dict):
+            return value
+        if isinstance(value, str):
+            try:
+                parsed = json.loads(value)
+            except Exception:
+                return None
+            if isinstance(parsed, dict):
+                return parsed
+        return None
+
+    @staticmethod
+    def _build_python_commands(manager: str, requirements: list[str], files: list[str]) -> list[str]:
+        commands: list[str] = []
+        if manager == "pip":
+            if "requirements.txt" in files:
+                commands.append("pip install -r requirements.txt")
+            if requirements:
+                commands.append("pip install " + " ".join(requirements))
+        elif manager == "poetry":
+            commands.append("poetry install")
+        elif manager == "uv":
+            commands.append("uv pip install -r requirements.txt" if "requirements.txt" in files else "uv pip install")
+        elif manager == "conda":
+            if "environment.yml" in files:
+                commands.append("conda env create -f environment.yml")
+        return commands
+
+    @staticmethod
+    def _build_node_commands(manager: str, has_lockfile: bool) -> list[str]:
+        if manager == "pnpm":
+            return ["pnpm install"]
+        if manager == "yarn":
+            return ["yarn install"]
+        return ["npm ci" if has_lockfile else "npm install"]
+
     async def list_versions(self, user: User, skill_id: str):
         repo = self._require_version_repo()
         skill = await self.get_skill(user, skill_id)
@@ -208,14 +268,38 @@ class SkillService:
     async def get_install_instructions(self, user: User, skill_id: str, version: str) -> dict:
         repo = self._require_version_repo()
         skill = await self.get_skill(user, skill_id)
+        self._ensure_active(skill)
         version = self._validate_version(version)
         record = await repo.get_by_version(skill.id, version)
         if not record:
             raise ValueError("Version not found")
+        dependency_spec = dict(record.dependency_spec or {})
         dependencies = list(record.dependencies or [])
         requirements_text = "\n".join(dependencies)
         commands: list[str] = []
-        if dependencies:
+        ecosystem = None
+        manifests: dict | None = None
+        if dependency_spec:
+            manifests = {"dependency_spec": dependency_spec}
+            python_spec = dependency_spec.get("python")
+            node_spec = dependency_spec.get("node")
+            if isinstance(python_spec, dict):
+                ecosystem = "python"
+                requirements = [str(item) for item in python_spec.get("requirements", []) if str(item).strip()]
+                files = [str(item) for item in python_spec.get("files", []) if str(item).strip()]
+                manager = str(python_spec.get("manager") or "pip")
+                if requirements:
+                    dependencies = requirements
+                    requirements_text = "\n".join(requirements)
+                commands = self._build_python_commands(manager, dependencies, files)
+            elif isinstance(node_spec, dict):
+                ecosystem = "node"
+                manager = str(node_spec.get("manager") or "npm")
+                lockfile = str(node_spec.get("lockfile") or "")
+                commands = self._build_node_commands(manager, bool(lockfile))
+                dependencies = []
+                requirements_text = ""
+        if not commands and dependencies:
             commands = [
                 "pip install " + " ".join(dependencies),
                 "pip install -r requirements.txt",
@@ -225,10 +309,14 @@ class SkillService:
             "dependencies": dependencies,
             "requirements_text": requirements_text,
             "commands": commands,
+            "ecosystem": ecosystem,
+            "manifests": manifests,
+            "dependency_spec": dependency_spec or None,
         }
 
     async def diff_versions(self, user: User, skill_id: str, from_version: str, to_version: str) -> dict:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_active(skill)
         base_dir = get_skill_versions_dir(user.id, skill.name)
         base_resolved = base_dir.resolve()
         from_version = self._validate_version(from_version)
@@ -357,6 +445,60 @@ class SkillService:
                 raise ValueError("Version already exists")
             description = str(metadata.get("description") or frontmatter.get("description") or skill.description)
             dependencies = self._normalize_dependencies(metadata.get("dependencies") or frontmatter.get("dependencies"))
+            explicit_dependency_spec = self._normalize_dependency_spec(
+                metadata.get("dependency_spec") or frontmatter.get("dependency_spec")
+            )
+            dependency_spec: dict
+            dependency_spec_version: str | None
+            if explicit_dependency_spec is not None:
+                dependency_spec = explicit_dependency_spec
+                dependency_spec_version = str(dependency_spec.get("schema_version") or "1")
+            else:
+                dependency_spec = {"schema_version": 1}
+                dependency_spec_version = "1"
+                entry_names = {info.filename.replace("\\", "/").lstrip("/") for info in entries}
+                python_spec: dict[str, object] = {}
+                node_spec: dict[str, object] = {}
+                requirements: list[str] = []
+                if "requirements.txt" in entry_names:
+                    requirements_text = archive.read("requirements.txt").decode("utf-8", errors="replace")
+                    requirements = self._parse_requirements_text(requirements_text)
+                    if requirements:
+                        dependencies = requirements
+                    python_spec = {
+                        "manager": "pip",
+                        "requirements": requirements,
+                        "files": ["requirements.txt"],
+                    }
+                if "environment.yml" in entry_names:
+                    python_spec = {
+                        "manager": "conda",
+                        "requirements": requirements,
+                        "files": ["environment.yml"],
+                    }
+                if "package.json" in entry_names:
+                    try:
+                        package_json = json.loads(archive.read("package.json").decode("utf-8", errors="replace"))
+                    except json.JSONDecodeError:
+                        package_json = {}
+                    lockfile = ""
+                    if "package-lock.json" in entry_names:
+                        lockfile = "package-lock.json"
+                    node_spec = {
+                        "manager": "npm",
+                        "package_json": package_json,
+                        "lockfile": lockfile or None,
+                    }
+                if not python_spec and dependencies:
+                    python_spec = {
+                        "manager": "pip",
+                        "requirements": dependencies,
+                        "files": [],
+                    }
+                if python_spec:
+                    dependency_spec["python"] = python_spec
+                if node_spec:
+                    dependency_spec["node"] = node_spec
             base_dir = get_skill_versions_dir(user.id, skill.name)
             base_resolved = base_dir.resolve()
             version_dir = (base_dir / version).resolve()
@@ -384,11 +526,14 @@ class SkillService:
                 version=version,
                 description=description,
                 dependencies=dependencies,
+                dependency_spec=dependency_spec,
+                dependency_spec_version=dependency_spec_version,
                 metadata={
                     "name": metadata.get("name") or frontmatter.get("name") or skill.name,
                     "description": description,
                     "version": version,
                     "dependencies": dependencies,
+                    "dependency_spec": dependency_spec,
                 },
             )
             await self.skill_repo.update(skill, current_version=version, description=description, is_active=True)

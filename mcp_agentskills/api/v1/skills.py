@@ -175,6 +175,11 @@ async def get_install_instructions(
     try:
         payload = await service.get_install_instructions(current_user, skill_id, version)
     except ValueError as exc:
+        if str(exc) == "SKILL_DEACTIVATED":
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail={"detail": "Skill deactivated", "code": "SKILL_DEACTIVATED"},
+            ) from exc
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return SkillInstallInstructionsResponse.model_validate(payload)
 
@@ -191,6 +196,11 @@ async def diff_skill_versions(
     try:
         payload = await service.diff_versions(current_user, skill_id, from_version, to_version)
     except ValueError as exc:
+        if str(exc) == "SKILL_DEACTIVATED":
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail={"detail": "Skill deactivated", "code": "SKILL_DEACTIVATED"},
+            ) from exc
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return SkillVersionDiffResponse.model_validate(payload)
 
@@ -220,6 +230,11 @@ async def list_skill_files(
     try:
         files = await service.list_skill_files(current_user, skill_id)
     except ValueError as exc:
+        if str(exc) == "SKILL_DEACTIVATED":
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail={"detail": "Skill deactivated", "code": "SKILL_DEACTIVATED"},
+            ) from exc
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return files
 
@@ -235,5 +250,10 @@ async def read_skill_file(
     try:
         content = await service.read_skill_file(current_user, skill_id, file_path)
     except ValueError as exc:
+        if str(exc) == "SKILL_DEACTIVATED":
+            raise HTTPException(
+                status_code=status.HTTP_410_GONE,
+                detail={"detail": "Skill deactivated", "code": "SKILL_DEACTIVATED"},
+            ) from exc
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(content, media_type="text/plain; charset=utf-8")

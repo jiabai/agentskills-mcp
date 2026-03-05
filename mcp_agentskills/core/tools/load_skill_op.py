@@ -20,6 +20,23 @@ from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validat
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 
 
+async def _is_skill_active(skill_name: str, user_id: str | None) -> bool:
+    if not user_id:
+        return True
+    try:
+        from mcp_agentskills.db.session import get_async_session
+        from mcp_agentskills.repositories.skill import SkillRepository
+    except Exception:
+        return True
+    async for session in get_async_session():
+        repo = SkillRepository(session)
+        record = await repo.get_by_name(user_id, skill_name)
+        if record and not record.is_active:
+            return False
+        return True
+    return True
+
+
 @C.register_op()
 class LoadSkillOp(BaseAsyncToolOp):
     """Operation for loading a specific skill's instructions.
@@ -118,6 +135,10 @@ class LoadSkillOp(BaseAsyncToolOp):
             skill_dir = Path(C.service_config.metadata["skill_dir"]).resolve()
             user_id = get_current_user_id()
             logger.info(f"🔧 Tool called: load_skill(skill_name='{skill_name}') with skill_dir={skill_dir}")
+            if not await _is_skill_active(skill_name, user_id):
+                payload = {"skill_name": skill_name, "message": "Skill deactivated"}
+                self.set_output(tool_error_payload(payload, "SKILL_DEACTIVATED"))
+                return
 
             skill_path = (
                 skill_dir / user_id / skill_name / "SKILL.md" if user_id else skill_dir / skill_name / "SKILL.md"

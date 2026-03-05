@@ -264,6 +264,51 @@ async def test_skill_deactivate_hides_from_list(client, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_skill_deactivate_blocks_file_access(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "blockedfile@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "blockedfile@example.com", "username": "blockedfile", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "blockedfile@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "blockedfile@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skillblock", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skillblock\nversion: 1.0.0\n---\nbody")
+    buffer.seek(0)
+    await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", buffer.read(), "application/zip")},
+        headers=headers,
+    )
+    await client.post(f"/api/v1/skills/{skill_id}/deactivate", headers=headers)
+    blocked = await client.get(f"/api/v1/skills/{skill_id}/files", headers=headers)
+    assert blocked.status_code == 410
+    payload = blocked.json()
+    assert payload["code"] == "SKILL_DEACTIVATED"
+    assert payload["timestamp"].endswith("Z")
+
+
+@pytest.mark.asyncio
 async def test_skill_install_instructions_returns_client_strategy(client, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
     await client.post(
@@ -314,6 +359,52 @@ async def test_skill_install_instructions_returns_client_strategy(client, tmp_pa
     assert "pip" in payload["commands"][0]
 
 
+@pytest.mark.asyncio
+async def test_skill_install_instructions_reads_requirements_file(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "reqs@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "reqs@example.com", "username": "reqsuser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "reqs@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "reqs@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skillreqs", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skillreqs\nversion: 1.0.0\n---\nbody")
+        archive.writestr("requirements.txt", "requests==2.31.0\npydantic\n")
+    buffer.seek(0)
+    await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", buffer.read(), "application/zip")},
+        headers=headers,
+    )
+    response = await client.get(
+        f"/api/v1/skills/{skill_id}/versions/1.0.0/install-instructions",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["dependencies"] == ["requests==2.31.0", "pydantic"]
+    assert payload["ecosystem"] == "python"
 @pytest.mark.asyncio
 async def test_skill_versions_diff_returns_modified_files(client, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))

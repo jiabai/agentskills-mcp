@@ -28,6 +28,8 @@ class SkillVersionRepository(BaseRepository):
         version: str,
         description: str,
         dependencies: list[str],
+        dependency_spec: dict,
+        dependency_spec_version: str | None,
         metadata: dict,
     ) -> SkillVersion:
         record = SkillVersion(
@@ -35,6 +37,8 @@ class SkillVersionRepository(BaseRepository):
             version=version,
             description=description,
             dependencies=dependencies,
+            dependency_spec=dependency_spec,
+            dependency_spec_version=dependency_spec_version,
             metadata_json=metadata,
         )
         self.session.add(record)

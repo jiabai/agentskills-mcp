@@ -286,6 +286,67 @@ Phase 6 (测试)
     │       └── T6.3.x (集成测试)
 ```
 
+### 补充执行序列：Skill 下架后客户端强制失效（S 端可落地部分）
+
+> 目标：Skill 下架（`is_active=false`）后，只要请求仍经过 S 端（API/MCP），就应被明确拒绝使用；客户端若有本地缓存，可通过 `cache_revoked_at` 做失效判断与清理。
+
+1. **定义服务端强制失效语义（接口与错误码）**
+   - 约定统一错误响应：`code`/`detail`/`timestamp`
+   - 建议错误码：`SKILL_DEACTIVATED`；建议 HTTP：`410 Gone`（或 `403 Forbidden`，需统一）
+2. **API 层增加“不可用”拦截点**
+   - 在读取/列出 Skill 文件、读取指定版本等“内容访问类接口”前检查 `Skill.is_active`
+   - 策略建议：下架后禁止读取与执行；允许上传新版本并显式激活（取决于产品策略）
+3. **MCP 工具增加“不可用”拦截点**
+   - 在 `load_skill` / `read_reference_file` / `run_shell_command` 等工具执行前校验 Skill 是否启用
+   - 注意：当前 MCP 工具主要基于文件系统读取，需引入 DB 校验以避免绕过 `is_active`
+4. **前端/客户端对接要点（供 C 端实现）**
+   - 下架后：客户端缓存命中时若 `cached_at <= cache_revoked_at`，视为失效并重新拉取/禁止使用
+5. **补齐测试（作为改代码时的验收项）**
+   - API：下架 Skill 的文件读取/内容访问返回 `SKILL_DEACTIVATED`
+   - MCP：下架 Skill 的工具调用返回 `SKILL_DEACTIVATED`
+   - 数据：`cache_revoked_at` 有值且随下架更新
+
+### 补充执行序列：更完整的依赖声明规范与多语言依赖生态适配（设计方案）
+
+> 背景：当前依赖声明仅支持 `dependencies: [a, b]` 这类简化写法，且默认按 Python/pip 输出安装指引；当 Skill 涉及 Node/Conda/Poetry 等生态时缺少可表达、可校验、可扩展的统一模型。
+>
+> 目标：在不改变 CS 定位（S 端不执行安装）的前提下，S 端能“存得下/看得懂/给得出安装指引”，C 端/执行器能“按生态自动安装并运行”。
+
+1. **定义依赖声明的统一数据模型（Schema v1）**
+   - 引入 `dependency_spec`（JSON）作为权威结构，支持多生态并行声明
+   - 推荐结构（示例）：
+     - `schema_version: 1`
+     - `python`: `{ manager: "pip"|"poetry"|"uv"|"conda", requirements: [...], files: [...] }`
+     - `node`: `{ manager: "npm"|"pnpm"|"yarn", package_json: {...}, lockfile: "package-lock.json" }`
+     - `system`: `{ packages: [...], notes: "..." }`
+   - 兼容策略：原有 `dependencies: [..]` 视为 `python.manager="pip"` 的 requirements 简写
+2. **定义 Skill 包内“依赖声明文件”的优先级与来源**
+   - 来源优先级建议：`metadata` 表单 JSON > `SKILL.md` frontmatter > 依赖清单文件
+   - 支持识别的文件（可选）：`requirements.txt`、`pyproject.toml`、`environment.yml`、`package.json`
+   - 规则：S 端只解析与存储，不执行安装；必要时回填为 `dependency_spec`
+3. **增强解析与校验（S 端）**
+   - `SKILL.md` frontmatter 建议切换到标准 YAML 解析（否则复杂结构无法可靠表达）
+   - 校验项：
+     - `schema_version` 是否支持
+     - 每个生态的字段完整性（例如 npm 必须有 `package_json.name` 或明确依赖列表）
+     - 依赖条目长度/数量/字符集限制（避免滥用）
+4. **后端数据落地（S 端）**
+   - 在 SkillVersion 维度存储 `dependency_spec`（JSON）与 `dependency_spec_version`
+   - 保留 `dependencies`（list[str]）作为向后兼容字段或派生字段（可选，逐步弃用）
+5. **对外接口调整（仍为“指引/元数据”而非“安装执行”）**
+   - `GET install-instructions` 按生态返回：
+     - `strategy=client`
+     - `ecosystem="python"|"node"|...`
+     - `commands`：面向执行器的推荐命令（如 `pip install -r requirements.txt` / `npm ci`）
+     - `manifests`：依赖清单原文或 JSON（用于执行器生成环境）
+6. **客户端/执行器对接约定（C 端实现）**
+   - 按 `dependency_spec` 选择隔离环境策略（venv/uv/conda/node_modules/container）
+   - 以 `skill_id@version` 为粒度缓存环境；版本变更或策略变更需重建
+7. **验收与测试（改代码时的检查项）**
+   - ZIP 上传：不同生态依赖声明能被解析并持久化到 SkillVersion
+   - install-instructions：能按生态输出稳定结构与可执行命令
+   - 兼容性：旧版 `dependencies: [...]` 的 Skill 行为不变
+
 ---
 
 ## 状态说明

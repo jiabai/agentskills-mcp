@@ -255,8 +255,123 @@ async def test_skill_deactivate_hides_from_list(client, tmp_path, monkeypatch):
     skill_id = created.json()["id"]
     deactivated = await client.post(f"/api/v1/skills/{skill_id}/deactivate", headers=headers)
     assert deactivated.status_code == 200
+    assert deactivated.json()["cache_revoked_at"] is not None
     listed = await client.get("/api/v1/skills", headers=headers)
     assert listed.json()["total"] == 0
     listed_all = await client.get("/api/v1/skills?include_inactive=true", headers=headers)
     assert listed_all.json()["total"] == 1
     assert listed_all.json()["items"][0]["is_active"] is False
+
+
+@pytest.mark.asyncio
+async def test_skill_install_instructions_returns_client_strategy(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "deps@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "deps@example.com", "username": "depsuser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "deps@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "deps@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skilldeps", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "SKILL.md",
+            "---\nname: skilldeps\nversion: 1.0.0\ndependencies: [requests, pydantic]\n---\nbody",
+        )
+    buffer.seek(0)
+    await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", buffer.read(), "application/zip")},
+        headers=headers,
+    )
+    response = await client.get(
+        f"/api/v1/skills/{skill_id}/versions/1.0.0/install-instructions",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["strategy"] == "client"
+    assert payload["dependencies"] == ["requests", "pydantic"]
+    assert "pip" in payload["commands"][0]
+
+
+@pytest.mark.asyncio
+async def test_skill_versions_diff_returns_modified_files(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "diff@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "diff@example.com", "username": "diffuser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "diff@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "diff@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skilldiff", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    first = io.BytesIO()
+    with zipfile.ZipFile(first, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skilldiff\nversion: 1.0.0\n---\nbody")
+        archive.writestr("reference.md", "first")
+    first.seek(0)
+    await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", first.read(), "application/zip")},
+        headers=headers,
+    )
+    second = io.BytesIO()
+    with zipfile.ZipFile(second, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skilldiff\nversion: 1.1.0\n---\nbody")
+        archive.writestr("reference.md", "second")
+        archive.writestr("new.md", "added")
+    second.seek(0)
+    await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", second.read(), "application/zip")},
+        headers=headers,
+    )
+    response = await client.get(
+        f"/api/v1/skills/{skill_id}/versions/diff?from=1.0.0&to=1.1.0",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert "new.md" in payload["added"]
+    modified = {item["path"]: item["diff"] for item in payload["modified"]}
+    assert "reference.md" in modified
+    assert "-first" in modified["reference.md"]
+    assert "+second" in modified["reference.md"]

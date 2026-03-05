@@ -1,4 +1,6 @@
-from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mcp_agentskills.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -14,5 +16,6 @@ class Skill(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     skill_dir: Mapped[str] = mapped_column(String(500))
     current_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    cache_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="skills")

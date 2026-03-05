@@ -105,7 +105,7 @@ async def test_rate_limit_enforced():
     settings.RATE_LIMIT_REQUESTS = original_requests
     settings.RATE_LIMIT_WINDOW = original_window
     assert first.status_code == 200
-    assert second.status_code == 403
+    assert second.status_code == 429
     assert second.json()["timestamp"].endswith("Z")
 
 

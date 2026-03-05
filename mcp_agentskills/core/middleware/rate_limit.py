@@ -30,7 +30,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     "code": "RATE_LIMIT_EXCEEDED",
                     "timestamp": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
                 }
-                return JSONResponse(status_code=403, content=payload)
+                return JSONResponse(status_code=429, content=payload)
             timestamps.append(now)
             self._requests[client] = timestamps
         return await call_next(request)

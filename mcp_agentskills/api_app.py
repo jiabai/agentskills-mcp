@@ -95,11 +95,17 @@ def create_application() -> FastAPI:
     async def metrics():
         db_connected = await _check_db_connection()
         skill_path = Path(settings.SKILL_STORAGE_PATH)
-        disk = psutil.disk_usage(str(skill_path))
+        disk_root = skill_path if skill_path.exists() else skill_path.parent
+        disk_usage_percent = None
+        try:
+            disk = psutil.disk_usage(str(disk_root))
+            disk_usage_percent = disk.percent
+        except Exception:
+            disk_usage_percent = None
         memory = psutil.virtual_memory()
         return {
             "db_connected": db_connected,
-            "disk_usage_percent": disk.percent,
+            "disk_usage_percent": disk_usage_percent,
             "memory_usage_percent": memory.percent,
             "cpu_usage_percent": psutil.cpu_percent(),
         }

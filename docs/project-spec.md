@@ -187,7 +187,9 @@ class Skill(Base):
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(500), default="")
     skill_dir: Mapped[str] = mapped_column(String(500))
+    current_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
+    cache_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -198,6 +200,33 @@ class Skill(Base):
     __table_args__ = (
         UniqueConstraint("user_id", "name", name="uix_user_skill_name"),
     )
+```
+
+### 3.2.1 SkillVersion 模型（版本归档）
+
+> 用于记录每次 ZIP 上传解析到的版本元数据，并与文件系统 `_versions/{version}` 归档目录对应。
+
+```python
+from datetime import datetime
+from sqlalchemy import JSON, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+from mcp_agentskills.models.base import generate_uuid
+
+class SkillVersion(Base):
+    __tablename__ = "skill_versions"
+    __table_args__ = (UniqueConstraint("skill_id", "version", name="uix_skill_versions"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
+    skill_id: Mapped[str] = mapped_column(String(36), ForeignKey("skills.id"), index=True)
+    version: Mapped[str] = mapped_column(String(50))
+    description: Mapped[str] = mapped_column(String(500), default="")
+    dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)
+    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    skill: Mapped["Skill"] = relationship("Skill")
 ```
 
 ### 3.3 APIToken 模型
@@ -596,13 +625,28 @@ class DeprecationNotifier:
 
 | 端点 | 方法 | 认证 | 描述 |
 |------|------|------|------|
-| `/` | GET | 是 | 列出用户的Skills（分页） |
+| `/` | GET | 是 | 列出用户的Skills（分页，支持 include_inactive） |
 | `/` | POST | 是 | 创建新Skill |
 | `/{skill_id}` | GET | 是 | 获取Skill详情 |
 | `/{skill_id}` | PUT | 是 | 更新Skill信息 |
 | `/{skill_id}` | DELETE | 是 | 删除Skill |
-| `/upload` | POST | 是 | 上传Skill文件（multipart） |
+| `/upload` | POST | 是 | 上传Skill文件（multipart，支持 zip 与 metadata） |
 | `/{skill_id}/files` | GET | 是 | 列出Skill文件 |
+| `/{skill_id}/deactivate` | POST | 是 | 下架Skill（写入 cache_revoked_at） |
+| `/{skill_id}/activate` | POST | 是 | 启用Skill |
+| `/{skill_id}/versions` | GET | 是 | 列出Skill版本 |
+| `/{skill_id}/versions/{version}/rollback` | POST | 是 | 回滚到指定版本 |
+| `/{skill_id}/versions/{version}/install-instructions` | GET | 是 | 获取客户端依赖安装指引 |
+| `/{skill_id}/versions/diff` | GET | 是 | 比较两个版本的文件差异 |
+
+**当前实现状态（已落地到代码）**
+
+- [x] ZIP 上传与版本创建（解析 `SKILL.md` frontmatter：version/dependencies）
+- [x] 版本归档到 `_versions/{version}` 并覆盖为当前版本文件集
+- [x] 版本列表与回滚
+- [x] 下架/启用与缓存失效标记 `cache_revoked_at`
+- [x] 依赖安装指引（策略：客户端安装，返回 dependencies + pip 命令）
+- [x] 版本差异对比（added/removed/modified，小文本 unified diff）
 
 ### 4.5 Dashboard模块 `/api/v1/dashboard`
 

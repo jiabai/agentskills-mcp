@@ -45,6 +45,6 @@ class AuthService:
         if not subject:
             raise ValueError("Invalid token")
         user = await self.user_repo.get_by_id(subject)
-        if not user:
+        if not user or not user.is_active:
             raise ValueError("User not found")
         return self.issue_token(user)

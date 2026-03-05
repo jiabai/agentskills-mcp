@@ -161,15 +161,16 @@ class McpAppProxy:
         self._app_getter = app_getter
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope.get("type") == "http":
-            authorized = await _authorize_mcp_request(scope, receive, send)
-            if not authorized:
-                set_current_user_id(None)
-                return
-        await ensure_mcp_initialized()
-        app = self._app_getter()
-        await app(scope, receive, send)
-        set_current_user_id(None)
+        try:
+            if scope.get("type") == "http":
+                authorized = await _authorize_mcp_request(scope, receive, send)
+                if not authorized:
+                    return
+            await ensure_mcp_initialized()
+            app = self._app_getter()
+            await app(scope, receive, send)
+        finally:
+            set_current_user_id(None)
 
 
 __all__ = [

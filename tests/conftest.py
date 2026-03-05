@@ -26,7 +26,9 @@ _set_default_env()
 
 @pytest_asyncio.fixture(scope="session")
 async def async_engine():
+    from mcp_agentskills import models as _models
     from mcp_agentskills.models.base import Base
+    _ = _models.__all__
 
     engine = create_async_engine(os.environ["DATABASE_URL"], future=True)
     async with engine.begin() as conn:

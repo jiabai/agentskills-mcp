@@ -1,9 +1,10 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 
 from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.skill import SkillRepository
 from mcp_agentskills.repositories.skill_version import SkillVersionRepository
+from mcp_agentskills.schemas.skill_lifecycle import SkillInstallInstructionsResponse, SkillVersionDiffResponse
 from mcp_agentskills.schemas.skill import SkillCreate, SkillListResponse, SkillResponse, SkillUpdate
 from mcp_agentskills.schemas.skill_version import SkillVersionListResponse, SkillVersionResponse
 from mcp_agentskills.services.skill import SkillService
@@ -161,6 +162,37 @@ async def list_skill_versions(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return SkillVersionListResponse(items=[SkillVersionResponse.model_validate(item) for item in versions])
+
+
+@router.get("/{skill_id}/versions/{version}/install-instructions", response_model=SkillInstallInstructionsResponse)
+async def get_install_instructions(
+    skill_id: str,
+    version: str,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        payload = await service.get_install_instructions(current_user, skill_id, version)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return SkillInstallInstructionsResponse.model_validate(payload)
+
+
+@router.get("/{skill_id}/versions/diff", response_model=SkillVersionDiffResponse)
+async def diff_skill_versions(
+    skill_id: str,
+    from_version: str = Query(..., alias="from"),
+    to_version: str = Query(..., alias="to"),
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        payload = await service.diff_versions(current_user, skill_id, from_version, to_version)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return SkillVersionDiffResponse.model_validate(payload)
 
 
 @router.post("/{skill_id}/versions/{version}/rollback", response_model=SkillVersionResponse)

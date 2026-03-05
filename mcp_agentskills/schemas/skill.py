@@ -20,6 +20,7 @@ class SkillResponse(BaseModel):
     skill_dir: str
     current_version: str | None
     is_active: bool
+    cache_revoked_at: datetime | None
     created_at: datetime
     updated_at: datetime
 

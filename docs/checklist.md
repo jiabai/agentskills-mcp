@@ -86,6 +86,11 @@
 > - 测试时应避免使用 PostgreSQL 特有特性，或使用条件判断兼容两种数据库
 > - 如果使用 PostgreSQL 特有特性（如 `uuid-ossp` 扩展），建议在测试环境中使用 `pytest-postgresql` 等工具启动真实 PostgreSQL 实例
 
+### 1.5 工程质量（Lint/Typecheck）
+
+- [x] `python -m ruff check .` 通过（无历史告警残留）
+- [x] `python -m mypy mcp_agentskills` 通过（类型检查无错误）
+
 ---
 
 ## 2. 数据库模型检查
@@ -116,11 +121,28 @@
   - [x] name
   - [x] description
   - [x] skill_dir
+  - [x] current_version
   - [x] is_active
+  - [x] cache_revoked_at
   - [x] created_at
   - [x] updated_at
 - [x] (user_id, name) 唯一约束已定义
 - [x] 正确定义与 User 的关系
+
+### 2.5 SkillVersion 模型（版本归档）
+
+- [x] `mcp_agentskills/models/skill_version.py` 文件存在
+- [x] SkillVersion 类继承自 Base
+- [x] 包含所有必需字段：
+  - [x] id (UUID, 主键)
+  - [x] skill_id (外键)
+  - [x] version
+  - [x] description
+  - [x] dependencies (JSON)
+  - [x] metadata (JSON)
+  - [x] created_at
+  - [x] updated_at
+- [x] (skill_id, version) 唯一约束已定义
 
 ### 2.3 APIToken 模型
 

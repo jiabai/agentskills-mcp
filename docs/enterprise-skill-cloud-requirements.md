@@ -164,6 +164,18 @@
 | F-004 | 技能搜索 | 按名称、标签、描述搜索 | P1 |
 | F-005 | 依赖管理 | 技能依赖关系声明和解析 | P1 |
 
+**当前实现状态（已落地到代码）**
+
+- [x] ZIP 上传（`/api/v1/skills/upload`，识别 `.zip`）
+- [x] frontmatter 解析（`SKILL.md`：name/description/version/dependencies）
+- [x] 版本归档目录（`_versions/{version}`）与当前版本覆盖
+- [x] 版本列表（`GET /api/v1/skills/{skill_id}/versions`）
+- [x] 版本回滚（`POST /api/v1/skills/{skill_id}/versions/{version}/rollback`）
+- [x] 技能下架/启用（`deactivate/activate`）
+- [x] 下架缓存失效标记（`cache_revoked_at`）
+- [x] 依赖安装指引（客户端安装，`install-instructions`）
+- [x] 版本差异对比（`versions/diff`，added/removed/modified + unified diff）
+
 **实现方案（与当前代码对齐）**
 
 - 上传接口扩展为 ZIP 上传与单文件上传兼容，ZIP 解包后进行文件名与路径校验
@@ -171,6 +183,60 @@
 - 版本目录采用 `_versions/{version}` 存档，当前版本覆盖到技能根目录
 - 版本列表与回滚通过新增 API 完成，回滚时复制目标版本到根目录
 - 下架通过 `is_active` 字段控制，列表默认仅返回已启用技能
+- 依赖安装策略采用“客户端安装”：服务端只输出依赖清单与安装指引，不在服务端执行安装
+- 版本差异对比提供 API，输出文件新增/删除/修改列表，并对小文本文件返回 unified diff
+- 下架缓存失效通过 `cache_revoked_at` 时间戳实现，客户端缓存命中时需校验失效点
+
+**实现细节（接口与数据约定）**
+
+1) **Skill 文件结构与版本归档**
+
+- Skill 当前版本目录：`{SKILL_STORAGE_PATH}/{user_id}/{skill_name}/`
+- Skill 历史版本归档：`{SKILL_STORAGE_PATH}/{user_id}/{skill_name}/_versions/{version}/`
+- 服务端行为：每次 ZIP 上传会先写入 `_versions/{version}`，然后覆盖复制到“当前版本目录”
+
+2) **metadata 来源与约定**
+
+- ZIP 包必须包含 `SKILL.md`
+- `SKILL.md` frontmatter 支持字段：`name`、`description`、`version`、`dependencies`
+- `dependencies` 推荐用数组：`dependencies: [requests, pydantic]`
+
+3) **技能上传**
+
+- `POST /api/v1/skills/upload`
+  - 表单：`skill_id`（必填）、`file`（必填）、`metadata`（可选，JSON 字符串）
+  - `.zip`：触发版本创建与解析；非 `.zip`：按单文件上传处理
+  - 成功（zip）：返回 `version`、`current_version`、`dependencies`
+
+4) **版本列表与回滚**
+
+- `GET /api/v1/skills/{skill_id}/versions`
+- `POST /api/v1/skills/{skill_id}/versions/{version}/rollback`
+  - 回滚后：当前版本目录会被目标版本文件覆盖
+  - Skill 元数据：`current_version` 更新为回滚目标版本
+
+5) **下架与缓存失效（客户端安装/本地缓存模式）**
+
+- `POST /api/v1/skills/{skill_id}/deactivate`
+  - `is_active=false`
+  - `cache_revoked_at=当前时间`
+- `POST /api/v1/skills/{skill_id}/activate`
+  - `is_active=true`
+- 客户端缓存校验建议：
+  - 缓存条目保存 `cached_at`
+  - 当服务端 `cache_revoked_at != null` 且 `cached_at <= cache_revoked_at` 时视为失效，需重新拉取
+
+6) **依赖安装策略（C：客户端安装）**
+
+- 服务端只提供依赖清单与安装指引，不执行安装
+- `GET /api/v1/skills/{skill_id}/versions/{version}/install-instructions`
+  - 返回 `strategy=client`、`dependencies`、`requirements_text`、`commands`
+
+7) **版本差异对比**
+
+- `GET /api/v1/skills/{skill_id}/versions/diff?from={from_version}&to={to_version}`
+  - 返回 `added` / `removed` / `modified`
+  - `modified[].diff` 对小文本文件返回 unified diff；大文件或二进制文件可返回空 diff
 
 #### 4.2.2 权限管理（P0）
 

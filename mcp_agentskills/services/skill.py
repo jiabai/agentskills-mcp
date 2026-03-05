@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
+import difflib
 import io
 import json
 from pathlib import Path
+import re
 import shutil
 import zipfile
 
@@ -92,7 +94,8 @@ class SkillService:
 
     async def deactivate_skill(self, user: User, skill_id: str) -> Skill:
         skill = await self.get_skill(user, skill_id)
-        return await self.skill_repo.update(skill, is_active=False)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
+        return await self.skill_repo.update(skill, is_active=False, cache_revoked_at=now)
 
     async def activate_skill(self, user: User, skill_id: str) -> Skill:
         skill = await self.get_skill(user, skill_id)
@@ -173,6 +176,23 @@ class SkillService:
         return metadata
 
     @staticmethod
+    def _validate_version(version: str) -> str:
+        normalized = str(version or "").strip()
+        if not normalized:
+            raise ValueError("Invalid version")
+        if len(normalized) > 100:
+            raise ValueError("Invalid version")
+        if normalized.startswith("."):
+            raise ValueError("Invalid version")
+        if "/" in normalized or "\\" in normalized:
+            raise ValueError("Invalid version")
+        if ".." in normalized or normalized in {".", ".."}:
+            raise ValueError("Invalid version")
+        if not re.fullmatch(r"[a-zA-Z0-9_\-\.]+", normalized):
+            raise ValueError("Invalid version")
+        return normalized
+
+    @staticmethod
     def _normalize_dependencies(value: object) -> list[str]:
         if isinstance(value, list):
             return [str(item) for item in value]
@@ -185,13 +205,87 @@ class SkillService:
         skill = await self.get_skill(user, skill_id)
         return await repo.list_by_skill(skill.id)
 
-    async def rollback_version(self, user: User, skill_id: str, version: str):
+    async def get_install_instructions(self, user: User, skill_id: str, version: str) -> dict:
         repo = self._require_version_repo()
         skill = await self.get_skill(user, skill_id)
+        version = self._validate_version(version)
         record = await repo.get_by_version(skill.id, version)
         if not record:
             raise ValueError("Version not found")
-        version_dir = get_skill_versions_dir(user.id, skill.name) / version
+        dependencies = list(record.dependencies or [])
+        requirements_text = "\n".join(dependencies)
+        commands: list[str] = []
+        if dependencies:
+            commands = [
+                "pip install " + " ".join(dependencies),
+                "pip install -r requirements.txt",
+            ]
+        return {
+            "strategy": "client",
+            "dependencies": dependencies,
+            "requirements_text": requirements_text,
+            "commands": commands,
+        }
+
+    async def diff_versions(self, user: User, skill_id: str, from_version: str, to_version: str) -> dict:
+        skill = await self.get_skill(user, skill_id)
+        base_dir = get_skill_versions_dir(user.id, skill.name)
+        base_resolved = base_dir.resolve()
+        from_version = self._validate_version(from_version)
+        to_version = self._validate_version(to_version)
+        from_dir = (base_dir / from_version).resolve()
+        to_dir = (base_dir / to_version).resolve()
+        if not from_dir.is_relative_to(base_resolved) or not to_dir.is_relative_to(base_resolved):
+            raise ValueError("Invalid version")
+        if not from_dir.exists() or not to_dir.exists():
+            raise ValueError("Version files not found")
+        from_files = {
+            str(path.relative_to(from_dir)).replace("\\", "/")
+            for path in from_dir.rglob("*")
+            if path.is_file()
+        }
+        to_files = {str(path.relative_to(to_dir)).replace("\\", "/") for path in to_dir.rglob("*") if path.is_file()}
+        added = sorted(to_files - from_files)
+        removed = sorted(from_files - to_files)
+        modified: list[dict] = []
+        for relative in sorted(from_files & to_files):
+            left = from_dir / relative
+            right = to_dir / relative
+            if left.read_bytes() == right.read_bytes():
+                continue
+            diff_text = ""
+            if left.stat().st_size <= 100_000 and right.stat().st_size <= 100_000:
+                left_text = left.read_text(encoding="utf-8", errors="replace").splitlines()
+                right_text = right.read_text(encoding="utf-8", errors="replace").splitlines()
+                diff_lines = difflib.unified_diff(
+                    left_text,
+                    right_text,
+                    fromfile=f"{from_version}/{relative}",
+                    tofile=f"{to_version}/{relative}",
+                    lineterm="",
+                )
+                diff_text = "\n".join(diff_lines)
+            modified.append({"path": relative, "diff": diff_text})
+        return {
+            "from_version": from_version,
+            "to_version": to_version,
+            "added": added,
+            "removed": removed,
+            "modified": modified,
+        }
+
+    async def rollback_version(self, user: User, skill_id: str, version: str):
+        repo = self._require_version_repo()
+        skill = await self.get_skill(user, skill_id)
+        version = self._validate_version(version)
+        record = await repo.get_by_version(skill.id, version)
+        if not record:
+            raise ValueError("Version not found")
+        base_dir = get_skill_versions_dir(user.id, skill.name)
+        base_resolved = base_dir.resolve()
+        version_dir = (base_dir / version).resolve()
+        if not version_dir.is_relative_to(base_resolved):
+            raise ValueError("Invalid version")
         if not version_dir.exists():
             raise ValueError("Version files not found")
         clear_skill_current_dir(user.id, skill.name)
@@ -257,12 +351,17 @@ class SkillService:
             version = str(metadata.get("version") or frontmatter.get("version") or "")
             if not version:
                 version = datetime.now(timezone.utc).strftime("v%Y%m%d%H%M%S")
+            version = self._validate_version(version)
             existing = await repo.get_by_version(skill.id, version)
             if existing:
                 raise ValueError("Version already exists")
             description = str(metadata.get("description") or frontmatter.get("description") or skill.description)
             dependencies = self._normalize_dependencies(metadata.get("dependencies") or frontmatter.get("dependencies"))
-            version_dir = get_skill_versions_dir(user.id, skill.name) / version
+            base_dir = get_skill_versions_dir(user.id, skill.name)
+            base_resolved = base_dir.resolve()
+            version_dir = (base_dir / version).resolve()
+            if not version_dir.is_relative_to(base_resolved):
+                raise ValueError("Invalid version")
             if version_dir.exists():
                 raise ValueError("Version already exists")
             version_dir.mkdir(parents=True, exist_ok=True)

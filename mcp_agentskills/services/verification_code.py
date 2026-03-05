@@ -10,7 +10,7 @@ from typing import Callable, Literal
 
 from loguru import logger
 from sqlalchemy import delete, select
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.db.session import get_async_session

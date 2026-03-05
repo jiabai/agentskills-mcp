@@ -35,6 +35,20 @@ class Settings(BaseSettings):
     FLOW_LLM_API_KEY: str = ""
     FLOW_LLM_BASE_URL: str = ""
 
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_USE_TLS: bool = True
+
+    ALIYUN_DM_ACCESS_KEY_ID: str = ""
+    ALIYUN_DM_ACCESS_KEY_SECRET: str = ""
+    ALIYUN_DM_ACCOUNT_NAME: str = ""
+    ALIYUN_DM_FROM_ALIAS: str = ""
+    ALIYUN_DM_REPLY_TO_ADDRESS: bool = True
+    ALIYUN_DM_ENDPOINT: str = "https://dm.aliyuncs.com/"
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):

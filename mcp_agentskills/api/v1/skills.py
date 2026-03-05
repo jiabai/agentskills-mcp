@@ -3,7 +3,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, Upl
 from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.skill import SkillRepository
+from mcp_agentskills.repositories.skill_version import SkillVersionRepository
 from mcp_agentskills.schemas.skill import SkillCreate, SkillListResponse, SkillResponse, SkillUpdate
+from mcp_agentskills.schemas.skill_version import SkillVersionListResponse, SkillVersionResponse
 from mcp_agentskills.services.skill import SkillService
 
 
@@ -16,12 +18,23 @@ async def list_skills(
     skip: int = 0,
     limit: int = 100,
     q: str | None = None,
+    include_inactive: bool = False,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
-    service = SkillService(SkillRepository(session))
-    skills = await service.list_skills(current_user, skip=skip, limit=limit, query=q)
-    total = await service.skill_repo.count_by_user(current_user.id, query=q)
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    skills = await service.list_skills(
+        current_user,
+        skip=skip,
+        limit=limit,
+        query=q,
+        include_inactive=include_inactive,
+    )
+    total = await service.skill_repo.count_by_user(
+        current_user.id,
+        query=q,
+        include_inactive=include_inactive,
+    )
     return SkillListResponse(
         items=[SkillResponse.model_validate(skill) for skill in skills],
         total=total,
@@ -91,16 +104,78 @@ async def delete_skill(
 async def upload_skill_file(
     skill_id: str = Form(...),
     file: UploadFile = File(...),
+    metadata: str | None = Form(None),
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
-    service = SkillService(SkillRepository(session))
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     content = await file.read()
     try:
-        filename = await service.upload_file(current_user, skill_id, file.filename or "", content)
+        filename = file.filename or ""
+        if filename.lower().endswith(".zip"):
+            payload = await service.upload_zip(current_user, skill_id, filename, content, metadata)
+            return payload
+        filename = await service.upload_file(current_user, skill_id, filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"filename": filename}
+
+
+@router.post("/{skill_id}/deactivate", response_model=SkillResponse)
+async def deactivate_skill(
+    skill_id: str,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        skill = await service.deactivate_skill(current_user, skill_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return skill
+
+
+@router.post("/{skill_id}/activate", response_model=SkillResponse)
+async def activate_skill(
+    skill_id: str,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        skill = await service.activate_skill(current_user, skill_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return skill
+
+
+@router.get("/{skill_id}/versions", response_model=SkillVersionListResponse)
+async def list_skill_versions(
+    skill_id: str,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        versions = await service.list_versions(current_user, skill_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return SkillVersionListResponse(items=[SkillVersionResponse.model_validate(item) for item in versions])
+
+
+@router.post("/{skill_id}/versions/{version}/rollback", response_model=SkillVersionResponse)
+async def rollback_skill_version(
+    skill_id: str,
+    version: str,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        record = await service.rollback_version(current_user, skill_id, version)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return SkillVersionResponse.model_validate(record)
 
 
 @router.get("/{skill_id}/files")
@@ -124,7 +199,7 @@ async def read_skill_file(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
-    service = SkillService(SkillRepository(session))
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
         content = await service.read_skill_file(current_user, skill_id, file_path)
     except ValueError as exc:

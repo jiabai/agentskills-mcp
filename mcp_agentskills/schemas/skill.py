@@ -18,6 +18,7 @@ class SkillResponse(BaseModel):
     name: str
     description: str
     skill_dir: str
+    current_version: str | None
     is_active: bool
     created_at: datetime
     updated_at: datetime

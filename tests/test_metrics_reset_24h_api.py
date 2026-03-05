@@ -10,12 +10,20 @@ from mcp_agentskills.repositories.user import UserRepository
 @pytest.mark.asyncio
 async def test_metrics_reset_24h_requires_superuser(client):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "basic-reset@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "basic-reset@example.com", "username": "basicreset", "password": "pass1234"},
+        json={"email": "basic-reset@example.com", "username": "basicreset", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "basic-reset@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "basic-reset@example.com", "password": "pass1234"},
+        json={"email": "basic-reset@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
     response = await client.post(
@@ -28,12 +36,20 @@ async def test_metrics_reset_24h_requires_superuser(client):
 @pytest.mark.asyncio
 async def test_metrics_reset_24h_removes_only_window_buckets(client, async_session):
     await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "admin-reset@example.com", "purpose": "register"},
+    )
+    await client.post(
         "/api/v1/auth/register",
-        json={"email": "admin-reset@example.com", "username": "adminreset", "password": "pass1234"},
+        json={"email": "admin-reset@example.com", "username": "adminreset", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "admin-reset@example.com", "purpose": "login"},
     )
     login = await client.post(
         "/api/v1/auth/login",
-        json={"email": "admin-reset@example.com", "password": "pass1234"},
+        json={"email": "admin-reset@example.com", "code": "123456"},
     )
     access = login.json()["access_token"]
 

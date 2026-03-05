@@ -251,6 +251,20 @@ class APIToken(Base):
 
 > 本节为参考实现/可选扩展，当前仓库未实现 `core/middleware/deprecation.py`、`core/decorators/deprecation.py`、`services/notification.py` 等代码。若需要该能力，请按本文示例自行落地并以实际代码为准。
 
+**含义说明**
+
+- **弃用中间件**：在网关层统一识别已弃用的端点或版本前缀，并自动附加 `Deprecation: true` 与 `Sunset` 响应头，明确“该接口已弃用”以及“预计移除日期”。
+- **弃用装饰器**：对单个端点进行更细粒度标记，可附带替代端点的指引信息，方便生成文档与提示迁移路径。
+- **通知机制**：按时间节点（示例为 90/30/7 天前）主动推送即将下线的提醒，建议通过定时任务或 CI/CD 调度执行。
+
+**意义与价值**
+
+- **兼容性承诺清晰**：客户端可在响应头中直接获知弃用状态和日落日期，降低升级不确定性。
+- **治理成本降低**：集中式中间件统一处理弃用标识，减少遗漏与多处重复实现。
+- **用户迁移可预期**：通知机制提前触达用户，避免接口突然下线导致的生产事故。
+- **标准化可集成**：与 RFC 8594 的 `Sunset` 语义一致，便于网关、监控与外部工具识别。
+- **版本演进可控**：为“旧版本至少 6 个月兼容期”的策略提供可执行支撑。
+
 使用 FastAPI 中间件实现自动添加弃用响应头：
 
 ```python
@@ -1261,6 +1275,20 @@ SKILL_STORAGE_PATH=/data/skills
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60
 
+# 邮件（DEBUG 使用 SMTP 备选，生产使用阿里云邮件推送）
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=your-sender@example.com
+SMTP_USE_TLS=true
+ALIYUN_DM_ACCESS_KEY_ID=your-aliyun-access-key-id
+ALIYUN_DM_ACCESS_KEY_SECRET=your-aliyun-access-key-secret
+ALIYUN_DM_ACCOUNT_NAME=sender@your-domain.com
+ALIYUN_DM_FROM_ALIAS=AgentSkills
+ALIYUN_DM_REPLY_TO_ADDRESS=true
+ALIYUN_DM_ENDPOINT=https://dm.aliyuncs.com/
+
 # LLM（可选：仅在需要调用 LLM Provider 时配置）
 FLOW_LLM_API_KEY=your-api-key
 FLOW_LLM_BASE_URL=https://api.openai.com/v1
@@ -1307,6 +1335,21 @@ class Settings(BaseSettings):
     # 限流配置
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
+
+    # 邮件发送
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = ""
+    SMTP_USE_TLS: bool = True
+
+    ALIYUN_DM_ACCESS_KEY_ID: str = ""
+    ALIYUN_DM_ACCESS_KEY_SECRET: str = ""
+    ALIYUN_DM_ACCOUNT_NAME: str = ""
+    ALIYUN_DM_FROM_ALIAS: str = ""
+    ALIYUN_DM_REPLY_TO_ADDRESS: bool = True
+    ALIYUN_DM_ENDPOINT: str = "https://dm.aliyuncs.com/"
 
     # LLM
     FLOW_LLM_API_KEY: str = ""
@@ -1373,6 +1416,57 @@ class Settings(BaseSettings):
 
 settings = Settings()
 ```
+
+### 9.3 邮件验证码发送与运维要求
+
+#### 当前实现与可行性
+- 发送入口为 `/api/v1/auth/verification-code`，登录/注册/邮箱绑定共用
+- 使用 FastAPI BackgroundTasks 异步触发发送，避免阻塞主请求
+- DEBUG=true 使用 SMTP；DEBUG=false 使用阿里云邮件推送
+- 验证码存储在数据库表（verification_codes），发送日志写入 email_delivery_logs
+- 支持有效期、重发间隔、错误次数限制与错误码映射
+- 发送失败会重试并记录失败原因
+- 若 SMTP/阿里云配置缺失会直接报错，需要在环境变量中配置
+
+#### 仍需补充的生产能力（建议）
+- 引入独立任务队列/Worker，统一设置超时、并发与重试策略
+- 增加按 IP/邮箱/设备的全局频控与风控策略（可与限流中间件联动）
+- 增加发送渠道故障时的降级或备用通道
+- 明确验证码与邮件日志的保留周期与清理任务
+- 模板与品牌配置参数化（标题/发件别名/多语言开关）并记录模板版本
+
+#### 前端交互规范（验证码）
+- 登录/注册页均提供“发送验证码”入口，未填写邮箱或处于冷却时间时禁用按钮
+- 发送成功后展示有效期提示，并启动重发倒计时（按钮显示剩余秒数）
+- 发送失败或校验失败需展示错误提示，文案与后端错误码一致
+- 登录成功跳转至控制台首页；注册成功提示后引导跳转登录页
+- 同一套交互规则复用于登录、注册与邮箱绑定
+
+#### 发送通道策略
+- DEBUG=true：使用 SMTP + 业务邮箱的备选方案
+- DEBUG=false：使用阿里云邮件推送服务
+
+#### 发送任务异步化
+- 邮件发送应放入任务队列或后台任务执行，避免阻塞用户请求
+- 建议为验证码发送设置独立队列与并发限制，避免高峰期影响主链路
+
+#### 验证码持久化存储
+- 生产环境应使用 Redis 或数据库存储验证码记录，避免多实例与重启导致校验失效
+- 存储字段至少包含：email、purpose、code、expires_at、resend_available_at、attempts_left
+
+#### 模板与内容管理
+- 邮件模板需包含验证码、有效期与重发间隔提示
+- 提供品牌文案与多语言扩展能力（至少支持中英模板切换）
+- 模板变更需记录版本与发布时间，支持回滚
+
+#### 配置与密钥管理
+- SMTP 账号、阿里云 AccessKey 只能通过环境变量或密钥管理系统注入
+- 生产环境严禁在代码与配置文件中硬编码密钥
+
+#### 监控与审计
+- 记录发送成功率、失败原因分布与重试次数
+- 发送失败需触发重试与告警（短信/IM/邮箱）
+- 审计日志需包含请求来源、目的邮箱、purpose、发送通道与结果
 
 # 数据库连接池配置示例（db/session.py）
 """

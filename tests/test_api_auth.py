@@ -86,7 +86,7 @@ async def test_login_invalid_credentials_format(client):
     assert response.status_code == 401
     payload = response.json()
     assert "detail" in payload
-    assert "code" in payload
+    assert payload["code"] == "CODE_INVALID"
     assert "timestamp" in payload
     assert payload["timestamp"].endswith("Z")
 

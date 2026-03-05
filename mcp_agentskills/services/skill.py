@@ -1,26 +1,36 @@
+from datetime import datetime, timezone
+import io
+import json
 from pathlib import Path
+import shutil
+import zipfile
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.utils.skill_storage import (
     MAX_FILES_PER_SKILL,
     MAX_FILE_SIZE,
     MAX_TOTAL_SIZE,
+    clear_skill_current_dir,
     create_skill_dir,
     delete_skill_dir,
     get_safe_skill_path,
+    get_skill_versions_dir,
     get_user_skill_dir,
     list_files,
+    validate_file_path,
     validate_skill_name,
     validate_filename,
 )
 from mcp_agentskills.models.skill import Skill
 from mcp_agentskills.models.user import User
 from mcp_agentskills.repositories.skill import SkillRepository
+from mcp_agentskills.repositories.skill_version import SkillVersionRepository
 
 
 class SkillService:
-    def __init__(self, skill_repo: SkillRepository):
+    def __init__(self, skill_repo: SkillRepository, version_repo: SkillVersionRepository | None = None):
         self.skill_repo = skill_repo
+        self.version_repo = version_repo
 
     async def list_skills(
         self,
@@ -28,8 +38,15 @@ class SkillService:
         skip: int = 0,
         limit: int = 100,
         query: str | None = None,
+        include_inactive: bool = False,
     ) -> list[Skill]:
-        return await self.skill_repo.list_by_user(user.id, skip=skip, limit=limit, query=query)
+        return await self.skill_repo.list_by_user(
+            user.id,
+            skip=skip,
+            limit=limit,
+            query=query,
+            include_inactive=include_inactive,
+        )
 
     async def get_skill(self, user: User, skill_id: str) -> Skill:
         skill = await self.skill_repo.get_by_id(skill_id)
@@ -72,6 +89,14 @@ class SkillService:
                 new_dir.mkdir(parents=True, exist_ok=True)
             fields["skill_dir"] = str(new_dir)
         return await self.skill_repo.update(skill, **fields)
+
+    async def deactivate_skill(self, user: User, skill_id: str) -> Skill:
+        skill = await self.get_skill(user, skill_id)
+        return await self.skill_repo.update(skill, is_active=False)
+
+    async def activate_skill(self, user: User, skill_id: str) -> Skill:
+        skill = await self.get_skill(user, skill_id)
+        return await self.skill_repo.update(skill, is_active=True)
 
     async def delete_skill(self, user: User, skill_id: str) -> bool:
         skill = await self.get_skill(user, skill_id)
@@ -118,3 +143,158 @@ class SkillService:
         safe_path.parent.mkdir(parents=True, exist_ok=True)
         safe_path.write_bytes(content)
         return filename
+
+    def _require_version_repo(self) -> SkillVersionRepository:
+        if not self.version_repo:
+            raise ValueError("Version repository not configured")
+        return self.version_repo
+
+    @staticmethod
+    def _parse_frontmatter(content: str) -> dict:
+        parts = content.split("---")
+        if len(parts) < 3:
+            return {}
+        frontmatter_text = parts[1].strip()
+        metadata: dict[str, object] = {}
+        for line in frontmatter_text.split("\n"):
+            line = line.strip()
+            if not line or ":" not in line:
+                continue
+            key, value = line.split(":", 1)
+            key = key.strip()
+            value = value.strip().strip("\"'")
+            if key == "dependencies":
+                if value.startswith("[") and value.endswith("]"):
+                    value = value[1:-1]
+                deps = [item.strip().strip("\"'") for item in value.split(",") if item.strip()]
+                metadata[key] = deps
+            else:
+                metadata[key] = value
+        return metadata
+
+    @staticmethod
+    def _normalize_dependencies(value: object) -> list[str]:
+        if isinstance(value, list):
+            return [str(item) for item in value]
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return []
+
+    async def list_versions(self, user: User, skill_id: str):
+        repo = self._require_version_repo()
+        skill = await self.get_skill(user, skill_id)
+        return await repo.list_by_skill(skill.id)
+
+    async def rollback_version(self, user: User, skill_id: str, version: str):
+        repo = self._require_version_repo()
+        skill = await self.get_skill(user, skill_id)
+        record = await repo.get_by_version(skill.id, version)
+        if not record:
+            raise ValueError("Version not found")
+        version_dir = get_skill_versions_dir(user.id, skill.name) / version
+        if not version_dir.exists():
+            raise ValueError("Version files not found")
+        clear_skill_current_dir(user.id, skill.name)
+        root_dir = get_user_skill_dir(user.id, skill.name)
+        for file_path in version_dir.rglob("*"):
+            if not file_path.is_file():
+                continue
+            relative = file_path.relative_to(version_dir)
+            target = root_dir / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(file_path, target)
+        await self.skill_repo.update(skill, current_version=version, description=record.description)
+        return record
+
+    async def upload_zip(
+        self,
+        user: User,
+        skill_id: str,
+        filename: str,
+        content: bytes,
+        metadata_text: str | None = None,
+    ) -> dict:
+        repo = self._require_version_repo()
+        skill = await self.get_skill(user, skill_id)
+        if not filename.lower().endswith(".zip"):
+            raise ValueError("Invalid zip file")
+        try:
+            archive = zipfile.ZipFile(io.BytesIO(content))
+        except zipfile.BadZipFile as exc:
+            raise ValueError("Invalid zip file") from exc
+        with archive:
+            entries = [info for info in archive.infolist() if not info.is_dir()]
+            if not entries:
+                raise ValueError("Zip is empty")
+            if len(entries) > MAX_FILES_PER_SKILL:
+                raise ValueError("Too many files in skill")
+            total_size = sum(info.file_size for info in entries)
+            if total_size > MAX_TOTAL_SIZE:
+                raise ValueError("Total skill size limit exceeded")
+            for info in entries:
+                if info.file_size > MAX_FILE_SIZE:
+                    raise ValueError("File too large")
+                file_path = info.filename.replace("\\", "/").lstrip("/")
+                valid, error = validate_file_path(file_path)
+                if not valid:
+                    raise ValueError(error)
+            skill_md = next(
+                (info for info in entries if info.filename.replace("\\", "/").lstrip("/") == "SKILL.md"),
+                None,
+            )
+            if not skill_md:
+                raise ValueError("SKILL.md not found")
+            skill_md_content = archive.read(skill_md).decode("utf-8", errors="replace")
+            frontmatter = self._parse_frontmatter(skill_md_content)
+            metadata: dict = {}
+            if metadata_text:
+                try:
+                    parsed = json.loads(metadata_text)
+                except json.JSONDecodeError as exc:
+                    raise ValueError("Invalid metadata") from exc
+                if isinstance(parsed, dict):
+                    metadata = parsed
+            version = str(metadata.get("version") or frontmatter.get("version") or "")
+            if not version:
+                version = datetime.now(timezone.utc).strftime("v%Y%m%d%H%M%S")
+            existing = await repo.get_by_version(skill.id, version)
+            if existing:
+                raise ValueError("Version already exists")
+            description = str(metadata.get("description") or frontmatter.get("description") or skill.description)
+            dependencies = self._normalize_dependencies(metadata.get("dependencies") or frontmatter.get("dependencies"))
+            version_dir = get_skill_versions_dir(user.id, skill.name) / version
+            if version_dir.exists():
+                raise ValueError("Version already exists")
+            version_dir.mkdir(parents=True, exist_ok=True)
+            for info in entries:
+                file_path = info.filename.replace("\\", "/").lstrip("/")
+                target = version_dir / file_path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(archive.read(info))
+            clear_skill_current_dir(user.id, skill.name)
+            root_dir = get_user_skill_dir(user.id, skill.name)
+            for entry_path in version_dir.rglob("*"):
+                if not entry_path.is_file():
+                    continue
+                relative = entry_path.relative_to(version_dir)
+                target = root_dir / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(entry_path, target)
+            record = await repo.create_version(
+                skill_id=skill.id,
+                version=version,
+                description=description,
+                dependencies=dependencies,
+                metadata={
+                    "name": metadata.get("name") or frontmatter.get("name") or skill.name,
+                    "description": description,
+                    "version": version,
+                    "dependencies": dependencies,
+                },
+            )
+            await self.skill_repo.update(skill, current_version=version, description=description, is_active=True)
+            return {
+                "version": record.version,
+                "current_version": version,
+                "dependencies": record.dependencies,
+            }

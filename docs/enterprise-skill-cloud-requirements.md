@@ -4,6 +4,7 @@
 **创建日期：** 2026 年 03 月 04 日  
 **作者：** aaron  
 **状态：** 草稿  
+**说明：** 本文档为企业私有云需求蓝图，当前仓库未实现对应能力，落地以另行项目为准。  
 
 ---
 
@@ -163,6 +164,14 @@
 | F-004 | 技能搜索 | 按名称、标签、描述搜索 | P1 |
 | F-005 | 依赖管理 | 技能依赖关系声明和解析 | P1 |
 
+**实现方案（与当前代码对齐）**
+
+- 上传接口扩展为 ZIP 上传与单文件上传兼容，ZIP 解包后进行文件名与路径校验
+- ZIP 内解析 `SKILL.md` 的 frontmatter，提取 name/description/version/dependencies
+- 版本目录采用 `_versions/{version}` 存档，当前版本覆盖到技能根目录
+- 版本列表与回滚通过新增 API 完成，回滚时复制目标版本到根目录
+- 下架通过 `is_active` 字段控制，列表默认仅返回已启用技能
+
 #### 4.2.2 权限管理（P0）
 
 | 功能 ID | 功能名称 | 描述 | 优先级 |
@@ -267,15 +276,18 @@
 
 | 组件 | 技术选型 | 说明 |
 |------|----------|------|
-| **后端框架** | Node.js + Fastify | 高性能、TypeScript 支持 |
-| **MCP SDK** | `@modelcontextprotocol/sdk` | 官方 SDK |
+| **后端框架** | FastAPI + Uvicorn | 高性能异步 Web 框架 |
+| **MCP 框架** | FlowLLM | MCP 服务运行框架 |
+| **ORM** | SQLAlchemy 2.0 | 异步 ORM 与事务管理 |
 | **数据库** | PostgreSQL 15+ | 元数据存储、支持 JSON |
+| **异步驱动** | asyncpg | PostgreSQL 异步驱动 |
 | **对象存储** | MinIO (私有化) / S3 | 技能文件存储 |
 | **缓存** | Redis 7+ | 会话缓存、限流 |
-| **认证** | JWT + LDAP/AD | 企业统一认证 |
+| **认证** | JWT + API Token + LDAP/AD | 企业统一认证与服务鉴权 |
+| **配置** | pydantic-settings | 分环境配置管理 |
 | **部署** | Docker + K8s | 容器化部署 |
 | **监控** | Prometheus + Grafana | 指标监控 |
-| **日志** | ELK Stack | 日志收集分析 |
+| **日志** | Loguru + ELK Stack | 应用日志与集中分析 |
 
 ---
 
@@ -315,19 +327,18 @@
 
 #### 6.2.1 技能加密
 
-```typescript
-// 云端加密（上传时）
-const encrypted = await crypto.encrypt(skill_code, {
-  algorithm: 'AES-256-GCM',
-  key: enterprise_master_key,
-  iv: random_iv
-});
-
-// 本地解密（执行时）
-const decrypted = await crypto.decrypt(encrypted, {
-  key: local_secure_enclave,
-  iv: stored_iv
-});
+```python
+encrypted = encrypt(
+    skill_code,
+    algorithm="AES-256-GCM",
+    key=enterprise_master_key,
+    iv=random_iv,
+)
+decrypted = decrypt(
+    encrypted,
+    key=local_secure_enclave,
+    iv=stored_iv,
+)
 ```
 
 #### 6.2.2 缓存加密

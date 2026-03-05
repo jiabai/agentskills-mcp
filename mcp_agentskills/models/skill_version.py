@@ -1,0 +1,17 @@
+from sqlalchemy import JSON, ForeignKey, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from mcp_agentskills.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+
+
+class SkillVersion(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "skill_versions"
+    __table_args__ = (UniqueConstraint("skill_id", "version", name="uix_skill_versions"),)
+
+    skill_id: Mapped[str] = mapped_column(String(36), ForeignKey("skills.id"), index=True)
+    version: Mapped[str] = mapped_column(String(50))
+    description: Mapped[str] = mapped_column(String(500), default="")
+    dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
+
+    skill = relationship("Skill")

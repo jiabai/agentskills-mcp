@@ -11,6 +11,20 @@ from mcp_agentskills.services.verification_code import get_verification_service
 
 router = APIRouter()
 
+_verification_error_messages = {
+    "CODE_EXPIRED": "验证码已过期",
+    "CODE_INVALID": "验证码错误",
+    "TOO_MANY_ATTEMPTS": "尝试次数过多，请稍后再试",
+    "RESEND_TOO_FREQUENT": "重发过于频繁",
+}
+
+
+def _verification_error_payload(detail: str) -> dict | None:
+    message = _verification_error_messages.get(detail)
+    if not message:
+        return None
+    return {"detail": message, "code": detail}
+
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(current_user=Depends(get_current_active_user)):
@@ -64,8 +78,15 @@ async def bind_email(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
-    verification_service = get_verification_service()
-    verification_service.verify_code(payload.email, "bind_email", payload.code)
+    verification_service = get_verification_service(session)
+    try:
+        await verification_service.verify_code(payload.email, "bind_email", payload.code)
+    except ValueError as exc:
+        detail = str(exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=_verification_error_payload(detail) or detail,
+        ) from exc
     user_repo = UserRepository(session)
     existing = await user_repo.get_by_email(payload.email)
     if existing and existing.id != current_user.id:

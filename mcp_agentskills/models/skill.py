@@ -12,6 +12,7 @@ class Skill(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(500), default="")
     skill_dir: Mapped[str] = mapped_column(String(500))
+    current_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
 
     user = relationship("User", back_populates="skills")

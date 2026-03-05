@@ -23,8 +23,11 @@ class SkillRepository(BaseRepository):
         skip: int = 0,
         limit: int = 100,
         query: str | None = None,
+        include_inactive: bool = False,
     ) -> list[Skill]:
         stmt = select(Skill).where(Skill.user_id == user_id)
+        if not include_inactive:
+            stmt = stmt.where(Skill.is_active.is_(True))
         if query:
             pattern = f"%{query}%"
             stmt = stmt.where(or_(Skill.name.ilike(pattern), Skill.description.ilike(pattern)))
@@ -32,8 +35,10 @@ class SkillRepository(BaseRepository):
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
 
-    async def count_by_user(self, user_id: str, query: str | None = None) -> int:
+    async def count_by_user(self, user_id: str, query: str | None = None, include_inactive: bool = False) -> int:
         stmt = select(func.count()).select_from(Skill).where(Skill.user_id == user_id)
+        if not include_inactive:
+            stmt = stmt.where(Skill.is_active.is_(True))
         if query:
             pattern = f"%{query}%"
             stmt = stmt.where(or_(Skill.name.ilike(pattern), Skill.description.ilike(pattern)))

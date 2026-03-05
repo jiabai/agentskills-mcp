@@ -10,6 +10,7 @@ SAFE_FILENAME_PATTERN = re.compile(r"^[a-zA-Z0-9_\-\.]+$")
 MAX_FILE_SIZE = 10 * 1024 * 1024
 MAX_TOTAL_SIZE = 100 * 1024 * 1024
 MAX_FILES_PER_SKILL = 50
+SKILL_VERSIONS_DIRNAME = "_versions"
 
 
 def validate_skill_name(skill_name: str) -> tuple[bool, str]:
@@ -42,6 +43,30 @@ def tool_error_payload(detail: object, code: str) -> str:
 def get_user_skill_dir(user_id: str, skill_name: str) -> Path:
     base = Path(settings.SKILL_STORAGE_PATH)
     return base / user_id / skill_name
+
+
+def get_skill_versions_dir(user_id: str, skill_name: str) -> Path:
+    return get_user_skill_dir(user_id, skill_name) / SKILL_VERSIONS_DIRNAME
+
+
+def clear_skill_current_dir(user_id: str, skill_name: str) -> None:
+    path = get_user_skill_dir(user_id, skill_name)
+    if not path.exists():
+        return
+    versions_dir = path / SKILL_VERSIONS_DIRNAME
+    for child in list(path.iterdir()):
+        if child == versions_dir:
+            continue
+        if child.is_file():
+            child.unlink()
+            continue
+        for sub in child.rglob("*"):
+            if sub.is_file():
+                sub.unlink()
+        for sub in sorted(child.rglob("*"), reverse=True):
+            if sub.is_dir():
+                sub.rmdir()
+        child.rmdir()
 
 
 def create_skill_dir(user_id: str, skill_name: str) -> Path:

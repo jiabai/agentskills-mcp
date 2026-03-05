@@ -111,6 +111,14 @@ def create_application() -> FastAPI:
             "timestamp": _utc_timestamp(),
         }
 
+    def _error_payload_from_exception(detail: object, status_code: int) -> dict:
+        if isinstance(detail, dict) and "detail" in detail and "code" in detail:
+            payload = dict(detail)
+            if "timestamp" not in payload:
+                payload["timestamp"] = _utc_timestamp()
+            return payload
+        return _error_payload(detail, _code_for_status(status_code))
+
     def _code_for_status(status_code: int) -> str:
         return {
             400: "BAD_REQUEST",
@@ -125,7 +133,7 @@ def create_application() -> FastAPI:
     async def http_exception_handler(_request: Request, exc: HTTPException):
         return JSONResponse(
             status_code=exc.status_code,
-            content=_error_payload(exc.detail, _code_for_status(exc.status_code)),
+            content=_error_payload_from_exception(exc.detail, exc.status_code),
         )
 
     @application.exception_handler(RequestValidationError)

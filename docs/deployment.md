@@ -47,7 +47,37 @@ FLOW_LLM_BASE_URL=https://api.openai.com/v1
 POSTGRES_USER=agentskills
 POSTGRES_PASSWORD=agentskills
 POSTGRES_DB=agentskills
+SMTP_HOST=smtp.example.com
+SMTP_PORT=587
+SMTP_USERNAME=your-smtp-user
+SMTP_PASSWORD=your-smtp-password
+SMTP_FROM=your-sender@example.com
+SMTP_USE_TLS=true
+ALIYUN_DM_ACCESS_KEY_ID=your-aliyun-access-key-id
+ALIYUN_DM_ACCESS_KEY_SECRET=your-aliyun-access-key-secret
+ALIYUN_DM_ACCOUNT_NAME=sender@your-domain.com
+ALIYUN_DM_FROM_ALIAS=AgentSkills
+ALIYUN_DM_REPLY_TO_ADDRESS=true
+ALIYUN_DM_ENDPOINT=https://dm.aliyuncs.com/
 ```
+
+## 邮件与验证码运行要求
+
+### 发送通道策略
+- DEBUG=true：使用 SMTP 备选方案（自建邮箱/业务邮箱）
+- DEBUG=false：使用阿里云邮件推送服务
+
+### 异步任务与持久化
+- 邮件发送建议通过任务队列或后台任务执行，避免阻塞 API 请求
+- 生产环境验证码存储建议使用 Redis 或数据库，保证多实例与重启一致性
+
+### 模板与内容管理
+- 模板需包含验证码、有效期与重发间隔提示
+- 建议提供中英模板与品牌文案配置
+
+### 监控与审计
+- 监控投递成功率、失败原因分布与重试次数
+- 发送失败需触发告警并写入审计日志
 
 ## 本地开发部署
 

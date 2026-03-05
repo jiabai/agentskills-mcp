@@ -105,7 +105,7 @@ python tests/test_load_skill_metadata_op.py <path/to/skills>
 
 ### Description
 
-This tool loads the content of a SKILL.md file for a given skill name.
+This tool loads the content of a SKILL.md file for a given skill name and returns the file content as-is.
 
 **多用户版本**: 根据用户ID构建正确的Skill路径。
 
@@ -115,7 +115,7 @@ This tool loads the content of a SKILL.md file for a given skill name.
 - **多用户**: 从上下文获取 `user_id`
 - **多用户**: 构建路径: `{skill_dir}/{user_id}/{skill_name}/SKILL.md` 或 `{skill_dir}/{skill_name}/SKILL.md`
 - Reads the SKILL.md file from that directory
-- Returns the file content
+- Returns the file content without stripping YAML frontmatter
 
 ### Input Parameters
 

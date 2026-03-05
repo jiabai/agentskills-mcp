@@ -187,11 +187,11 @@
 
 ### 4.1 验证码安全
 
-- [ ] 邮箱验证码发送接口存在（登录/注册/绑定复用）
-- [ ] 验证码有效期字段存在（expires_in）
-- [ ] 重发间隔字段存在（resend_interval）
-- [ ] 错误次数限制字段存在（max_attempts/attempts_left）
-- [ ] 验证码错误与过期错误码一致（CODE_INVALID/CODE_EXPIRED）
+- [x] 邮箱验证码发送接口存在（登录/注册/绑定复用）
+- [x] 验证码有效期字段存在（expires_in）
+- [x] 重发间隔字段存在（resend_interval）
+- [x] 错误次数限制字段存在（max_attempts/attempts_left）
+- [x] 验证码错误与过期错误码一致（CODE_INVALID/CODE_EXPIRED）
 
 ### 4.2 JWT 认证
 

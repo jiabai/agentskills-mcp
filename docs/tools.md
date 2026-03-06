@@ -218,7 +218,7 @@ This tool executes shell commands. Optionally (disabled by default), it can auto
 
 **多用户版本**: 在用户私有的Skill目录中执行命令。
 
-> **⚠️ 安全警告**: 出于安全考虑，该工具在多用户环境下仅允许执行**白名单内的安全命令**（如 `python`, `node`, `bash` 等），且严禁包含危险操作（如 `rm -rf`, `sudo` 等）。任何未授权的命令执行请求都将被拒绝。详见 [安全规范](./REFACTORING_GUIDE.md#311-runshellcommandop-安全增强)。
+> **⚠️ 安全警告**: 出于安全考虑，该工具在多用户环境下仅允许执行**白名单内的安全命令**（如 `python`, `node`, `bash` 等），且严禁包含危险操作（如 `rm -rf`, `sudo` 等）。任何未授权的命令执行请求都将被拒绝。详见 [安全规范](./project-spec.md#105-runshellcommandop-安全增强建议)。
 
 ### Key Operation Flow
 

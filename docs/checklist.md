@@ -35,7 +35,7 @@
 |------|---------|
 | project-spec.md | 检查时参考技术规范 |
 | task_list.md | 完成任务后进行对应检查 |
-| REFACTORING_GUIDE.md | 遇到问题时参考注意事项 |
+| deployment.md | 遇到部署与运维问题时参考 |
 
 ---
 
@@ -79,7 +79,7 @@
 - [x] 确保 SQLite 测试与 PostgreSQL 生产环境的 SQL 语法兼容性
 - [x] 确保主键 UUID 由应用层生成（uuid4），迁移脚本不依赖 gen_random_uuid()
 
-> **说明**: 项目同时支持 PostgreSQL（生产环境）和 SQLite（测试环境）。测试环境使用 SQLite 是为了简化测试执行，无需启动外部数据库服务。详见 [project-spec.md](./project-spec.md) 和 [REFACTORING_GUIDE.md](./REFACTORING_GUIDE.md)。
+> **说明**: 项目同时支持 PostgreSQL（生产环境）和 SQLite（测试环境）。测试环境使用 SQLite 是为了简化测试执行，无需启动外部数据库服务。详见 [project-spec.md](./project-spec.md)。
 
 > **兼容性注意事项**:
 > - PostgreSQL 和 SQLite 在某些 SQL 语法上有差异，如 `UUID` 类型、`JSON` 操作等

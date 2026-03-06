@@ -6,6 +6,15 @@
 
 ---
 
+## 阶段概览
+
+- Phase 1: 基础设施搭建（配置、模型、迁移、Schemas）
+- Phase 2: 安全与认证模块（安全工具、中间件、Repo/Service）
+- Phase 3: API 接口实现（认证、用户、Token、Skill）
+- Phase 4: MCP 服务集成（工具改造、HTTP/SSE）
+- Phase 5: 应用入口与部署（FastAPI 入口、部署配置）
+- Phase 6: 测试（单元与集成）
+
 ## Phase 1: 基础设施搭建
 
 ### 1.1 项目配置

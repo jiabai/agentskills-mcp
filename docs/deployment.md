@@ -13,6 +13,10 @@
 - 适用：本地单用户、CLI 集成
 - 入口：`mcp_agentskills.main`
 
+## 公网版与私有化版
+
+部署形态与功能开关建议见 [public-vs-private-deployment-matrix.md](./public-vs-private-deployment-matrix.md)。
+
 ## 前置条件
 
 - Python 3.10+
@@ -59,6 +63,20 @@ ALIYUN_DM_ACCOUNT_NAME=sender@your-domain.com
 ALIYUN_DM_FROM_ALIAS=AgentSkills
 ALIYUN_DM_REPLY_TO_ADDRESS=true
 ALIYUN_DM_ENDPOINT=https://dm.aliyuncs.com/
+```
+
+## 数据库准备
+
+```bash
+createdb agentskills
+alembic upgrade head
+```
+
+## Skill 存储准备
+
+```bash
+mkdir -p /data/skills
+chmod 755 /data/skills
 ```
 
 ## 邮件与验证码运行要求
@@ -130,7 +148,7 @@ docker compose run --rm migrate
 agentskills-mcp
 ```
 
-## 健康检查
+## 健康检查与指标
 
 ```bash
 GET /health
@@ -144,6 +162,52 @@ GET /health
   "db_connected": true
 }
 ```
+
+```bash
+GET /metrics
+```
+
+返回字段包括数据库连接状态与资源使用率（磁盘、内存、CPU）。
+
+## 备份策略
+
+### 数据库备份（Linux/macOS）
+
+```bash
+pg_dump agentskills > backup/agentskills_$(date +%Y%m%d).sql
+find /backup -name "agentskills_*.sql" -mtime +7 -delete
+```
+
+### 数据库备份（Windows PowerShell）
+
+```powershell
+$backupPath = "C:\backup\agentskills_$(Get-Date -Format 'yyyyMMdd').sql"
+pg_dump agentskills > $backupPath
+Get-ChildItem "C:\backup\agentskills_*.sql" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item
+```
+
+### Skill 文件备份（Linux/macOS）
+
+```bash
+tar -czf backup/skills_$(date +%Y%m%d).tar.gz /data/skills
+find /backup -name "skills_*.tar.gz" -mtime +7 -delete
+```
+
+### Skill 文件备份（Windows PowerShell）
+
+```powershell
+$backupPath = "C:\backup\skills_$(Get-Date -Format 'yyyyMMdd').zip"
+Compress-Archive -Path "C:\data\skills" -DestinationPath $backupPath -Force
+Get-ChildItem "C:\backup\skills_*.zip" | Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-7) } | Remove-Item
+```
+
+## 监控建议
+
+- API 响应时间（P99）
+- 数据库连接状态
+- 磁盘使用率与内存占用
+- HTTP 5xx 错误率
+- Token 调用频率异常峰值
 
 ## MCP 接入示例
 

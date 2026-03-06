@@ -1,8 +1,4 @@
-# <img src="docs/figure/agentskills-logo.png" alt="Agent Skills MCP Logo" width="5%" style="vertical-align: middle;"> AgentSkills MCP: Bringing Anthropic's Agent Skills to Any MCP-compatible Agent
-
-<p align="center">
-  <strong></strong>
-</p>
+# <img src="docs/figure/agentskills-logo.png" alt="Agent Skills MCP Logo" width="5%" style="vertical-align: middle;"> AgentSkills MCP Private Skills SaaS
 
 <p align="center">
   <a href="https://pypi.org/project/mcp-agentskills/"><img src="https://img.shields.io/badge/python-3.10+-blue" alt="Python Version"></a>
@@ -15,319 +11,88 @@
   <a href="./README_ZH.md">简体中文</a> | English
 </p>
 
-
 ## 📖 Project Overview
 
-**Agent Skills** is a new function recently introduced by Anthropic. By packaging specialized skills into modular resources, it allows Claude to transform on demand into a “tailored expert” suited to any scenario.
-**AgentSkills MCP**, built on the [FlowLLM](https://github.com/flowllm-ai/flowllm) framework, unlocks Claude’s proprietary Agent Skills for any MCP-compatible agent.
-It implements the **Progressive Disclosure** architecture proposed in Anthropic’s official [Agent Skills engineering blog](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills), enabling agents to load necessary skills as needed, thereby efficiently utilizing limited context windows.
+AgentSkills MCP is now a **private Skills management SaaS**. It provides multi-tenant accounts, private Skill spaces, a web console, and MCP HTTP/SSE access so clients can execute Skills securely. The system manages Skill lifecycles through the Web API and exposes MCP endpoints for execution, enabling a complete “upload → manage → run” workflow.
 
-### 💡 Why Choose AgentSkills MCP?
+## ✅ Key Capabilities
 
-- ✅ **Zero-Code Configuration**: one-command install (`pip install mcp-agentskills`)
-- ✅ **Out-of-the-Box**: uses official Skill format and fully compatible with [Anthropic’s Agent Skills](https://github.com/anthropics/skills)
-- ✅ **MCP Support**: multiple transports (stdio/SSE/HTTP), works with any MCP-compatible agent<!-- - ✅ **Progressive Disclosure**: smart context loading, minimal overhead until skills are needed -->
-- ✅ **Flexible Skill Path**: custom skill directories with automatic detection, parsing, and loading
+- Multi-user accounts with JWT authentication
+- API Tokens for MCP access control
+- Skill creation, ZIP upload, versioning, rollback, deactivate/activate
+- Console for Skills, Tokens, profile, and security settings
+- Dashboard metrics with maintenance endpoints
+- MCP HTTP/SSE endpoints with user isolation
 
-## 🔥 Latest Updates
+## 🚀 Quick Start (SaaS mode)
 
-- [2025-12] 🎉 Released mcp-agentskills v0.1.1
-
-## 🚀 Quick Start
-
-### Installation
-
-Install AgentSkills MCP with pip:
+### 1. Install dependencies
 
 ```bash
-pip install mcp-agentskills
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
 ```
 
-Or with uv:
+### 2. Configure environment variables
+
+Copy `.env.example` to `.env` and set at least:
 
 ```bash
-uv pip install mcp-agentskills
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/agentskills
+SECRET_KEY=your-secret-key-min-32-chars
+SKILL_STORAGE_PATH=/data/skills
+CORS_ORIGINS=["http://localhost:3000"]
 ```
 
-<details>
-<summary><strong>For Development (if you want to modify the code):</strong></summary>
+### 3. Initialize the database
 
 ```bash
-git clone https://github.com/zouyingcao/agentskills-mcp.git
-cd agentskills-mcp
-
-conda create -n agentskills-mcp python==3.10
-conda activate agentskills-mcp
-pip install -e .
-```
-</details>
-
----
-### Load Skills
-
-1. Create a directory to store Skills, like:
-
-```bash
-mkdir skills
+alembic upgrade head
 ```
 
-2. Clone from open-source GitHub repositories, e.g.,
-
-```bash
-https://github.com/anthropics/skills
-https://github.com/ComposioHQ/awesome-claude-skills
-```
-
-3. Add the collected Skills into the directory created in step 1. Each Skill is a folder containing a SKILL.md file.
-
----
-
-### Run
-
-<details>
-<summary><strong>Local process communication (stdio)</strong></summary>
-
-<p align="left">
-  <sub>This mode runs AgentSkills MCP via <code>uvx</code> and communicates through stdin/stdout, suitable for local MCP clients.</sub>
-</p>
-
-```json
-{
-  "mcpServers": {
-    "agentskills-mcp": {
-      "command": "uvx",
-      "args": [
-        "agentskills-mcp",
-        "config=default",
-        "mcp.transport=stdio",
-        "metadata.skill_dir=\"./skills\""
-      ],
-      "env": {
-        "FLOW_LLM_API_KEY": "xxx",
-        "FLOW_LLM_BASE_URL": "https://dashscope.aliyuncs.com/compatible-mode/v1"
-      }
-    }
-  }
-}
-```
-</details>
-
-<details>
-<summary><strong>Remote communication (FlowLLM SSE/HTTP Server)</strong></summary>
-
-<p align="left">
-  <sub>This mode runs AgentSkills MCP as a standalone SSE/HTTP server that can be accessed remotely.</sub>
-</p>
-
-**- Step 1:** Configure Environment Variables
-
-Copy `.env.example` to `.env` and fill in your API key:
-
-```bash
-cp .env.example .env
-# Edit the .env file and fill in your API key
-```
-
-**- Step 2:** Start the Server
-
-Start the AgentSkills MCP server with SSE transport:
-
-```bash
-agentskills-mcp \
-  config=default \
-  mcp.transport=sse \
-  mcp.host=0.0.0.0 \
-  mcp.port=8001 \
-  metadata.skill_dir="./skills"
-```
-
-The service will be available at: `http://0.0.0.0:8001/sse`
-
-**- Step 3:** Connect from MCP Client
-
-  - Add this configuration to your MCP client (Cursor, Gemini Code, Cline, etc.) to connect to the remote SSE server:
-
-```json
-{
-  "mcpServers": {
-    "agentskills-mcp": {
-      "type": "sse",
-      "url": "http://0.0.0.0:8001/sse"
-    }
-  }
-}
-```
-
-  - You can also use the [FastMCP](https://gofastmcp.com/getting-started/welcome) Python client to directly access the server:
-
-```python
-import asyncio
-from fastmcp import Client
-
-
-async def main():
-    async with Client("http://0.0.0.0:8001/sse") as client:
-        tools = await client.list_tools()
-        for tool in tools:
-            print(tool)
-
-        result = await client.call_tool(
-            name="load_skill",
-            arguments={
-              "skill_name": "pdf"
-            }
-        )
-        print(result)
-
-
-asyncio.run(main())
-```
-
-#### One-Command Test
-
-<p align="left">
-  <sub>This command will start the server, connect via FastMCP client, and test all available tools automatically.</sub>
-</p>
-
-```bash
-python tests/run_project_sse.py <path/to/skills>
-or
-python tests/run_project_http.py <path/to/skills>
-```
-
-</details>
-
-<details>
-<summary><strong>FastAPI multi-user mode (HTTP API + MCP)</strong></summary>
-
-<p align="left">
-  <sub>This mode starts the FastAPI app with user authentication, API Token, and private Skill space.</sub>
-</p>
-
-**- Step 1:** Configure Environment Variables
-
-Set required variables for database and security, plus LLM access:
-
-```bash
-DATABASE_URL=postgresql+asyncpg://user:password@host:5432/agentskills
-SECRET_KEY=your-32-char-secret
-FLOW_LLM_API_KEY=xxx
-FLOW_LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-SKILL_STORAGE_PATH=./skills
-```
-
-**- Step 2:** Start the Server
+### 4. Start the API server
 
 ```bash
 uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000
 ```
 
-**- Step 3:** Use the API
-
-- Web API base: `http://0.0.0.0:8000/api/v1`
-- MCP endpoints: `http://0.0.0.0:8000/mcp` and `http://0.0.0.0:8000/sse`
-- Create API Token via `/api/v1/tokens`, then call MCP with `Authorization: Bearer <token>`
-
-</details>
-
-### Frontend Console
+### 5. Start the frontend console
 
 ```bash
 cd frontend
 npm install
-npm run dev
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 ```
 
-Environment variable:
+## 🔌 MCP Integration Example
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```json
+{
+  "mcpServers": {
+    "agentskills-mcp": {
+      "type": "http",
+      "url": "https://your-domain.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ask_live_xxx..."
+      }
+    }
+  }
+}
 ```
 
-### Demo
+## 📚 Documentation
 
-After starting the AgentSkills MCP server with the SSE transport, you can run the demo:
-
-```bash
-# Enable Agent Skills for the Qwen model.
-# Since Qwen supports function calling, you can implement Agent Skills by passing the MCP tools registered by the AgentSkills MCP service to the tools parameter.
-cd tests
-python run_skill_agent.py
-```
-
----
-## 🔧 MCP Tools
-
-This service provides four tools to support Agent Skills:
-- **load_skill_metadata** — Loads the names and descriptions of all Skills into the agent context at startup (always called)
-- **load_skill** — When a specific skill is needed, loads the SKILL.md content by skill name (invoked when triggering the Skill)
-- **read_reference_file** — Reads specific files from a skill, such as scripts or reference documents (on demand)
-- **run_shell_command** — Executes shell commands to run executable scripts included in the skill (on demand)
-
-For detailed parameters and usage examples, see the [documentation](docs/tools.md).
-
-## ⚙️ Server Configuration Parameters
-
-These parameters apply to the FlowLLM mode (`agentskills-mcp`).
-
-| Parameter               | Description                                                                                                                                                  | Example                                 |
-|------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------|-----------------------------------------|
-| `config`               | Configuration files to load (comma-separated). Default: `default` (core workflow)                                                                           | `config=default`                        |
-| `mcp.transport`        | Transport mode: `stdio` (stdin/stdout, good for local), `sse` (Server-Sent Events, good for online apps), `http` (RESTful, good for lightweight remote calls) | `mcp.transport=stdio`                   |
-| `mcp.host`             | Host address (for sse/http transport only)                                                                                                                             | `mcp.host=0.0.0.0`                      |
-| `mcp.port`             | Port number (for sse/http transport only)                                                                                                                                     | `mcp.port=8001`                         |
-| `metadata.skill_dir`   | Skills Directory (required)                                                                                                                       | `metadata.skill_dir=./skills`                 |
-<!-- | `llm.default.model_name` | Default LLM model name (overrides settings in config files)                                                                                             | `llm.default.model_name=qwen3-30b-a3b-thinking-2507` | -->
-
-For the full set of available options and defaults, refer to [default.yaml](./agentskills_mcp/config/default.yaml).
-
-#### FlowLLM Environment Variables
-
-| Variable Name                  | Required | Description                                  |
-|----------------------|----------|----------------------------------------------|
-| `FLOW_LLM_API_KEY`   | ✅ Yes   | API key for OpenAI-compatible LLM Service       |
-| `FLOW_LLM_BASE_URL`  | ✅ Yes   | Base URL for OpenAI-compatible LLM Service    |
-
-#### FastAPI Environment Variables
-
-| Variable Name                  | Required | Description                                  |
-|----------------------|----------|----------------------------------------------|
-| `DATABASE_URL`       | ✅ Yes   | Database connection string                    |
-| `SECRET_KEY`         | ✅ Yes   | JWT signing key (>=32 characters)            |
-| `FLOW_LLM_API_KEY`   | ✅ Yes   | API key for OpenAI-compatible LLM Service       |
-| `FLOW_LLM_BASE_URL`  | ✅ Yes   | Base URL for OpenAI-compatible LLM Service    |
-| `SKILL_STORAGE_PATH` | ❌ No    | Skill storage path (defaults to config)      |
-| `CORS_ORIGINS`       | ❌ No    | Allowed origins list                          |
-
----
+- Docs index: [docs/README.md](docs/README.md)
+- Technical spec: [docs/project-spec.md](docs/project-spec.md)
+- Deployment guide: [docs/deployment.md](docs/deployment.md)
+- MCP tools: [docs/tools.md](docs/tools.md)
+- Public vs private matrix: [docs/public-vs-private-deployment-matrix.md](docs/public-vs-private-deployment-matrix.md)
 
 ## 🤝 Contributing
 
-We welcome community contributions! To get started:
-
-1. Install the package in development mode:
-```bash
-pip install -e .
-```
-
-2. Submit a pull request with your changes.
-
----
-
-## 📚 Learn More
-
-- [Anthropic Agent Skills Documentation](https://code.claude.com/docs/zh-CN/skills)
-- [Anthropic Engineering Blog](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills)
-- [Claude Agent Skills: A First Principles Deep Dive](https://leehanchung.github.io/blogs/2025/10/26/claude-skills-deep-dive/)
-- [FlowLLM Documentation](https://flowllm-ai.github.io/flowllm/)
-- [MCP Documentation](https://modelcontextprotocol.io/docs/getting-started/intro)
+Issues and pull requests are welcome.
 
 ## ⚖️ License
 
-This project is licensed under the Apache License 2.0 — see [LICENSE](./LICENSE) for details.
-
----
-
-## 📈 Star History
-
-[![Star History Chart](https://api.star-history.com/svg?repos=zouyingcao/agentskills-mcp&type=Date)](https://www.star-history.com/#zouyingcao/agentskills-mcp&Date)
+This project is licensed under the Apache License 2.0 — see [LICENSE](./LICENSE).

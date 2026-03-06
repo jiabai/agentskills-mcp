@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import yaml
 
 from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.security.rbac import is_skill_visible
 from mcp_agentskills.core.utils.skill_storage import (
     MAX_FILES_PER_SKILL,
     MAX_FILE_SIZE,
@@ -29,6 +30,7 @@ from mcp_agentskills.core.utils.skill_storage import (
     validate_skill_name,
     validate_filename,
 )
+from mcp_agentskills.core.utils.skill_archive import load_archive, save_archive
 from mcp_agentskills.models.skill import Skill
 from mcp_agentskills.models.user import User
 from mcp_agentskills.repositories.skill import SkillRepository
@@ -48,8 +50,10 @@ class SkillService:
         query: str | None = None,
         include_inactive: bool = False,
     ) -> list[Skill]:
-        return await self.skill_repo.list_by_user(
+        return await self.skill_repo.list_visible(
             user.id,
+            user.enterprise_id,
+            user.team_id,
             skip=skip,
             limit=limit,
             query=query,
@@ -58,27 +62,50 @@ class SkillService:
 
     async def get_skill(self, user: User, skill_id: str) -> Skill:
         skill = await self.skill_repo.get_by_id(skill_id)
-        if not skill or skill.user_id != user.id:
+        if not skill:
+            raise ValueError("Skill not found")
+        if not is_skill_visible(user, skill):
             raise ValueError("Skill not found")
         return skill
 
-    async def create_skill(self, user: User, name: str, description: str, tags: list[str]) -> Skill:
+    async def create_skill(
+        self,
+        user: User,
+        name: str,
+        description: str,
+        tags: list[str] | None = None,
+        visibility: str | None = None,
+    ) -> Skill:
         valid, error = validate_skill_name(name)
         if not valid:
             raise ValueError(error)
         if await self.skill_repo.get_by_name(user.id, name):
             raise ValueError("Skill already exists")
+        tags = tags or []
+        visibility_value = (visibility or settings.DEFAULT_SKILL_VISIBILITY or "private").strip().lower()
+        if visibility_value not in {"private", "team", "enterprise"}:
+            raise ValueError("Invalid visibility")
         path = create_skill_dir(user.id, name)
         return await self.skill_repo.create(
             user_id=user.id,
             name=name,
             description=description,
             tags=tags,
+            visibility=visibility_value,
+            enterprise_id=user.enterprise_id,
+            team_id=user.team_id,
             skill_dir=str(path),
         )
 
     async def update_skill(self, user: User, skill_id: str, **fields) -> Skill:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
+        visibility = fields.get("visibility")
+        if visibility is not None:
+            normalized = str(visibility).strip().lower()
+            if normalized not in {"private", "team", "enterprise"}:
+                raise ValueError("Invalid visibility")
+            fields["visibility"] = normalized
         new_name = fields.get("name")
         if new_name is None:
             fields.pop("name", None)
@@ -101,15 +128,18 @@ class SkillService:
 
     async def deactivate_skill(self, user: User, skill_id: str) -> Skill:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
         now = datetime.now(timezone.utc).replace(microsecond=0)
         return await self.skill_repo.update(skill, is_active=False, cache_revoked_at=now)
 
     async def activate_skill(self, user: User, skill_id: str) -> Skill:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
         return await self.skill_repo.update(skill, is_active=True)
 
     async def delete_skill(self, user: User, skill_id: str) -> bool:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
         await self.skill_repo.delete(skill)
         delete_skill_dir(user.id, skill.name)
         return True
@@ -132,6 +162,7 @@ class SkillService:
 
     async def upload_file(self, user: User, skill_id: str, filename: str, content: bytes) -> str:
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
         valid, error = validate_filename(filename)
         if not valid:
             raise ValueError(error)
@@ -165,6 +196,11 @@ class SkillService:
     def _ensure_active(skill: Skill) -> None:
         if not skill.is_active:
             raise ValueError("SKILL_DEACTIVATED")
+
+    @staticmethod
+    def _ensure_owner(user: User, skill: Skill) -> None:
+        if skill.user_id != user.id:
+            raise ValueError("Skill not found")
 
     @staticmethod
     def _parse_frontmatter(content: str) -> dict:
@@ -232,6 +268,11 @@ class SkillService:
         encoded = base64.b64encode(encrypted).decode("utf-8")
         checksum = hashlib.sha256(encrypted).hexdigest()
         return encoded, f"sha256:{checksum}"
+
+    @staticmethod
+    def _checksum_payload(payload: bytes) -> str:
+        checksum = hashlib.sha256(payload).hexdigest()
+        return f"sha256:{checksum}"
 
     @staticmethod
     def _normalize_dependency_spec(value: object) -> dict | None:
@@ -317,18 +358,26 @@ class SkillService:
         record = await repo.get_by_version(skill.id, target_version)
         if not record:
             raise ValueError("Version not found")
-        base_dir = get_skill_versions_dir(user.id, skill.name)
-        version_dir = (base_dir / target_version).resolve()
-        if not version_dir.exists():
-            raise ValueError("Version files not found")
-        buffer = io.BytesIO()
-        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-            for file_path in version_dir.rglob("*"):
-                if not file_path.is_file():
-                    continue
-                relative = file_path.relative_to(version_dir)
-                archive.write(file_path, arcname=relative.as_posix())
-        encrypted_code, checksum = self._encrypt_payload(buffer.getvalue())
+        archive_bytes = await load_archive(user.id, skill.name, target_version)
+        if archive_bytes is None:
+            base_dir = get_skill_versions_dir(user.id, skill.name)
+            version_dir = (base_dir / target_version).resolve()
+            if not version_dir.exists():
+                raise ValueError("Version files not found")
+            buffer = io.BytesIO()
+            with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+                for file_path in version_dir.rglob("*"):
+                    if not file_path.is_file():
+                        continue
+                    relative = file_path.relative_to(version_dir)
+                    archive.write(file_path, arcname=relative.as_posix())
+            archive_bytes = buffer.getvalue()
+            await save_archive(user.id, skill.name, target_version, archive_bytes)
+        if settings.ENABLE_SKILL_DOWNLOAD_ENCRYPTION:
+            encrypted_code, checksum = self._encrypt_payload(archive_bytes)
+        else:
+            encrypted_code = base64.b64encode(archive_bytes).decode("utf-8")
+            checksum = self._checksum_payload(archive_bytes)
         expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         return {
             "skill_id": skill.id,
@@ -336,6 +385,7 @@ class SkillService:
             "encrypted_code": encrypted_code,
             "checksum": checksum,
             "expires_at": expires_at,
+            "cache_ttl_seconds": settings.SKILL_CACHE_TTL_SECONDS,
         }
 
     async def get_install_instructions(self, user: User, skill_id: str, version: str) -> dict:
@@ -438,6 +488,7 @@ class SkillService:
     async def rollback_version(self, user: User, skill_id: str, version: str):
         repo = self._require_version_repo()
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
         version = self._validate_version(version)
         record = await repo.get_by_version(skill.id, version)
         if not record:
@@ -471,6 +522,7 @@ class SkillService:
     ) -> dict:
         repo = self._require_version_repo()
         skill = await self.get_skill(user, skill_id)
+        self._ensure_owner(user, skill)
         if not filename.lower().endswith(".zip"):
             raise ValueError("Invalid zip file")
         try:
@@ -610,6 +662,7 @@ class SkillService:
                 },
             )
             await self.skill_repo.update(skill, current_version=version, description=description, is_active=True)
+            await save_archive(user.id, skill.name, version, content)
             return {
                 "version": record.version,
                 "current_version": version,

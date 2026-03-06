@@ -6,11 +6,13 @@ from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
 from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
+from mcp_agentskills.core.security.rbac import has_permission, is_skill_visible
 from mcp_agentskills.core.utils.skill_storage import get_skill_versions_dir, tool_error_payload
 from mcp_agentskills.core.utils.user_context import get_current_user_id
-from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.db import session as db_session
 from mcp_agentskills.repositories.skill import SkillRepository
 from mcp_agentskills.repositories.skill_version import SkillVersionRepository
+from mcp_agentskills.repositories.user import UserRepository
 from mcp_agentskills.services.skill import SkillService
 
 
@@ -33,18 +35,36 @@ class SkillListResourceOp(BaseAsyncToolOp):
             },
         )
 
+    def _set_output(self, value: str):
+        self._output = value
+        self.set_output(value)
+
     async def async_execute(self):
         exception: Exception | None = None
         try:
+            self._output = None
             user_id = get_current_user_id()
             if not user_id:
                 payload = {"contents": [{"uri": "skill://list", "mimeType": "application/json", "text": '{"skills": []}'}]}
-                self.set_output(json.dumps(payload, ensure_ascii=False))
+                self._set_output(json.dumps(payload, ensure_ascii=False))
                 return
-            async for session in get_async_session():
+            async for session in db_session.get_async_session():
                 skill_repo = SkillRepository(session)
                 version_repo = SkillVersionRepository(session)
-                skills = await skill_repo.list_by_user(user_id, include_inactive=False)
+                user_repo = UserRepository(session)
+                user = await user_repo.get_by_id(user_id)
+                if not user:
+                    self._set_output(tool_error_payload("Unauthorized", "UNAUTHORIZED"))
+                    return
+                if not has_permission(user, "skill.list"):
+                    self._set_output(tool_error_payload("Permission denied", "PERMISSION_DENIED"))
+                    return
+                skills = await skill_repo.list_visible(
+                    user.id,
+                    user.enterprise_id,
+                    user.team_id,
+                    include_inactive=False,
+                )
                 items = []
                 for skill in skills:
                     version = skill.current_version
@@ -67,8 +87,7 @@ class SkillListResourceOp(BaseAsyncToolOp):
                     )
                 body = json.dumps({"skills": items}, ensure_ascii=False)
                 payload = {"contents": [{"uri": "skill://list", "mimeType": "application/json", "text": body}]}
-                self.set_output(json.dumps(payload, ensure_ascii=False))
-                return
+                self._set_output(json.dumps(payload, ensure_ascii=False))
         except Exception as exc:
             exception = exc
             raise
@@ -94,21 +113,34 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
             },
         )
 
+    def _set_output(self, value: str):
+        self._output = value
+        self.set_output(value)
+
     async def async_execute(self):
         exception: Exception | None = None
         try:
+            self._output = None
             user_id = get_current_user_id()
             if not user_id:
-                self.set_output(tool_error_payload("Unauthorized", "UNAUTHORIZED"))
+                self._set_output(tool_error_payload("Unauthorized", "UNAUTHORIZED"))
                 return
             skill_id = self.input_dict["skill_id"]
             version_input = self.input_dict.get("version")
-            async for session in get_async_session():
+            async for session in db_session.get_async_session():
                 skill_repo = SkillRepository(session)
                 version_repo = SkillVersionRepository(session)
+                user_repo = UserRepository(session)
+                user = await user_repo.get_by_id(user_id)
+                if not user:
+                    self._set_output(tool_error_payload("Unauthorized", "UNAUTHORIZED"))
+                    return
+                if not has_permission(user, "skill.read"):
+                    self._set_output(tool_error_payload("Permission denied", "PERMISSION_DENIED"))
+                    return
                 skill = await skill_repo.get_by_id(skill_id)
-                if not skill or str(skill.user_id) != str(user_id):
-                    self.set_output(tool_error_payload("Skill not found", "SKILL_NOT_FOUND"))
+                if not skill or not is_skill_visible(user, skill):
+                    self._set_output(tool_error_payload("Skill not found", "SKILL_NOT_FOUND"))
                     return
                 version = version_input or skill.current_version or ""
                 if not version:
@@ -116,11 +148,11 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
                     if versions:
                         version = versions[0].version
                 if not version:
-                    self.set_output(tool_error_payload("Version not found", "VERSION_NOT_FOUND"))
+                    self._set_output(tool_error_payload("Version not found", "VERSION_NOT_FOUND"))
                     return
                 record = await version_repo.get_by_version(skill.id, version)
                 if not record:
-                    self.set_output(tool_error_payload("Version not found", "VERSION_NOT_FOUND"))
+                    self._set_output(tool_error_payload("Version not found", "VERSION_NOT_FOUND"))
                     return
                 version_dir = get_skill_versions_dir(user_id, skill.name) / version
                 skill_md_path = version_dir / "SKILL.md"
@@ -142,7 +174,7 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
                     "author": str(skill.user_id),
                     "parameters": parameters,
                     "dependencies": list(record.dependencies or []),
-                    "visible": "private",
+                    "visible": skill.visibility or "private",
                     "created_at": _format_time(skill.created_at),
                     "updated_at": _format_time(skill.updated_at),
                     "dependency_spec": record.dependency_spec or None,
@@ -157,7 +189,7 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
                         }
                     ]
                 }
-                self.set_output(json.dumps(payload, ensure_ascii=False))
+                self._set_output(json.dumps(payload, ensure_ascii=False))
                 return
         except Exception as exc:
             exception = exc

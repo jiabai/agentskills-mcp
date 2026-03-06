@@ -1,10 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.core.security.password import verify_password
+from mcp_agentskills.core.security.rbac import has_permission
 from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
 from mcp_agentskills.repositories.user import UserRepository
+from mcp_agentskills.schemas.auth import UserIdentityUpdate
 from mcp_agentskills.schemas.user import UserBindEmail, UserDelete, UserPasswordUpdate, UserResponse, UserUpdate
+from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.user import UserService
 from mcp_agentskills.services.verification_code import get_verification_service
 
@@ -94,3 +99,33 @@ async def bind_email(
     service = UserService(user_repo)
     await service.update_user(current_user, email=payload.email)
     return {"bound": True}
+
+
+@router.put("/{user_id}/identity", response_model=UserResponse)
+async def update_identity(
+    request: Request,
+    user_id: str,
+    payload: UserIdentityUpdate,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    if not has_permission(current_user, "user.manage"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    user_repo = UserRepository(session)
+    target = await user_repo.get_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    fields = payload.model_dump(exclude_unset=True)
+    service = UserService(user_repo)
+    updated = await service.update_user(target, **fields)
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="user.identity.update",
+            target=target.id,
+            ip=request.client.host if request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+            metadata=fields,
+        )
+    return updated

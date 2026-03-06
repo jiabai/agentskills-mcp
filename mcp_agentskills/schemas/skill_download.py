@@ -14,3 +14,4 @@ class SkillDownloadResponse(BaseModel):
     encrypted_code: str
     checksum: str
     expires_at: datetime
+    cache_ttl_seconds: int | None = None

@@ -51,6 +51,8 @@ dependencies = [
     "flowllm>=0.2.0.7",
     "loguru>=0.7.0",
     "psutil>=5.9.0",
+    "boto3>=1.34.0",
+    "ldap3>=2.9.1",
     "pipreqs"
 ]
 
@@ -102,6 +104,14 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = ["alembic", "alembic.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["boto3", "botocore", "botocore.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = ["ldap3"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

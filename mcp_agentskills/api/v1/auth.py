@@ -1,7 +1,9 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.user import UserRepository
+from mcp_agentskills.schemas.auth import LDAPLoginRequest, SSOLoginRequest
 from mcp_agentskills.schemas.response import AccessTokenResponse, TokenPair
 from mcp_agentskills.schemas.token import TokenRefresh
 from mcp_agentskills.schemas.user import UserLoginCode, UserRegisterCode
@@ -33,6 +35,8 @@ async def send_verification_code(
     background_tasks: BackgroundTasks,
     session=Depends(get_async_session),
 ):
+    if not settings.ENABLE_EMAIL_OTP_LOGIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email OTP disabled")
     service = get_verification_service(session)
     try:
         response = await service.send_code(payload.email, payload.purpose, schedule=background_tasks.add_task)
@@ -52,6 +56,8 @@ async def send_verification_code(
 
 @router.post("/register", response_model=TokenPair, status_code=status.HTTP_201_CREATED)
 async def register(payload: UserRegisterCode, session=Depends(get_async_session)):
+    if not settings.ENABLE_PUBLIC_SIGNUP:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Signup disabled")
     verification_service = get_verification_service(session)
     service = AuthService(UserRepository(session))
     try:
@@ -75,6 +81,8 @@ async def register(payload: UserRegisterCode, session=Depends(get_async_session)
 
 @router.post("/login", response_model=TokenPair)
 async def login(payload: UserLoginCode, session=Depends(get_async_session)):
+    if not settings.ENABLE_EMAIL_OTP_LOGIN:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Email OTP disabled")
     verification_service = get_verification_service(session)
     service = AuthService(UserRepository(session))
     try:
@@ -100,3 +108,27 @@ async def refresh(payload: TokenRefresh, session=Depends(get_async_session)):
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     return AccessTokenResponse(access_token=token_pair.access_token)
+
+
+@router.post("/sso/login", response_model=TokenPair)
+async def sso_login(payload: SSOLoginRequest, session=Depends(get_async_session)):
+    if not settings.ENABLE_SSO:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="SSO disabled")
+    service = AuthService(UserRepository(session))
+    try:
+        token_pair = await service.login_sso(payload.id_token)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)
+
+
+@router.post("/ldap/login", response_model=TokenPair)
+async def ldap_login(payload: LDAPLoginRequest, session=Depends(get_async_session)):
+    if not settings.ENABLE_LDAP:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="LDAP disabled")
+    service = AuthService(UserRepository(session))
+    try:
+        token_pair = await service.login_ldap(payload.username, payload.password)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)

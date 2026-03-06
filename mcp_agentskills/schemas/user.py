@@ -50,6 +50,10 @@ class UserResponse(BaseModel):
     username: str
     is_active: bool
     is_superuser: bool
+    enterprise_id: str | None = None
+    team_id: str | None = None
+    role: str
+    status: str
     created_at: datetime
     updated_at: datetime
 

@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     LOG_FILE: str = "/var/log/agentskills/app.log"
 
     SKILL_STORAGE_PATH: str = "/data/skills"
+    SKILL_ARCHIVE_BACKEND: str = "local"
+    SKILL_ARCHIVE_S3_BUCKET: str = ""
+    SKILL_ARCHIVE_S3_REGION: str = ""
+    SKILL_ARCHIVE_S3_ENDPOINT: str = ""
+    SKILL_ARCHIVE_S3_ACCESS_KEY_ID: str = ""
+    SKILL_ARCHIVE_S3_SECRET_ACCESS_KEY: str = ""
+    SKILL_ARCHIVE_S3_FORCE_PATH_STYLE: bool = True
+    SKILL_DOWNLOAD_TTL_SECONDS: int = 3600
+    SKILL_CACHE_TTL_SECONDS: int = 604800
 
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
@@ -48,6 +57,46 @@ class Settings(BaseSettings):
     ALIYUN_DM_FROM_ALIAS: str = ""
     ALIYUN_DM_REPLY_TO_ADDRESS: bool = True
     ALIYUN_DM_ENDPOINT: str = "https://dm.aliyuncs.com/"
+    ENABLE_PUBLIC_SIGNUP: bool = True
+    ENABLE_EMAIL_OTP_LOGIN: bool = True
+    ENABLE_SSO: bool = False
+    ENABLE_LDAP: bool = False
+    ENABLE_ORG_MODEL: bool = False
+    ENABLE_RBAC: bool = False
+    ENABLE_SKILL_VISIBILITY: bool = False
+    ENABLE_AUDIT_LOG: bool = False
+    ENABLE_AUDIT_EXPORT: bool = False
+    ENABLE_SKILL_DOWNLOAD_ENCRYPTION: bool = True
+    ENABLE_LOCAL_CACHE_ENCRYPTION: bool = True
+    ENABLE_SANDBOX_EXECUTION: bool = False
+    ENABLE_RESOURCE_QUOTA: bool = False
+    ENABLE_NETWORK_EGRESS_CONTROL: bool = False
+    ENABLE_RATE_LIMIT: bool = True
+    ENABLE_METRICS: bool = True
+    DEFAULT_SKILL_VISIBILITY: str = "private"
+    DEFAULT_ROLE: str = "member"
+    DEFAULT_USER_STATUS: str = "active"
+    RBAC_ROLE_PERMISSIONS: dict = {}
+    SSO_JWT_SECRET: str = ""
+    SSO_JWT_ISSUER: str = ""
+    SSO_JWT_AUDIENCE: str = ""
+    SSO_JWT_ALGORITHM: str = "HS256"
+    SSO_EMAIL_CLAIM: str = "email"
+    SSO_USERNAME_CLAIM: str = "username"
+    SSO_ENTERPRISE_CLAIM: str = "enterprise_id"
+    SSO_TEAM_CLAIM: str = "team_id"
+    SSO_ROLE_CLAIM: str = "role"
+    SSO_STATUS_CLAIM: str = "status"
+    LDAP_URL: str = ""
+    LDAP_USER_DN_TEMPLATE: str = ""
+    LDAP_SEARCH_BASE: str = ""
+    LDAP_SEARCH_FILTER: str = "(uid={username})"
+    LDAP_EMAIL_ATTR: str = "mail"
+    LDAP_USERNAME_ATTR: str = "uid"
+    LDAP_ENTERPRISE_ATTR: str = "enterprise_id"
+    LDAP_TEAM_ATTR: str = "team_id"
+    LDAP_ROLE_ATTR: str = "role"
+    LDAP_STATUS_ATTR: str = "status"
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -71,6 +120,19 @@ class Settings(BaseSettings):
         if not self.DEBUG and (not self.CORS_ORIGINS or "*" in self.CORS_ORIGINS):
             raise ValueError("生产环境 CORS_ORIGINS 必须显式配置且不能包含通配符 '*'")
         return self
+
+    @field_validator("RBAC_ROLE_PERMISSIONS", mode="before")
+    @classmethod
+    def parse_role_permissions(cls, v):
+        if isinstance(v, str):
+            raw = v.strip()
+            if raw:
+                import json
+
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+        return v
 
     @field_validator("SECRET_KEY")
     @classmethod

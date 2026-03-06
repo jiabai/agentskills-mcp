@@ -1,13 +1,23 @@
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, Response, UploadFile, status
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.auth import get_current_active_user
+from mcp_agentskills.core.security.rbac import has_permission
 from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
 from mcp_agentskills.repositories.skill import SkillRepository
 from mcp_agentskills.repositories.skill_version import SkillVersionRepository
 from mcp_agentskills.schemas.skill_download import SkillDownloadRequest, SkillDownloadResponse
 from mcp_agentskills.schemas.skill_lifecycle import SkillInstallInstructionsResponse, SkillVersionDiffResponse
-from mcp_agentskills.schemas.skill import SkillCreate, SkillListResponse, SkillResponse, SkillUpdate
+from mcp_agentskills.schemas.skill import (
+    SkillCachePolicyResponse,
+    SkillCreate,
+    SkillListResponse,
+    SkillResponse,
+    SkillUpdate,
+)
 from mcp_agentskills.schemas.skill_version import SkillVersionListResponse, SkillVersionResponse
+from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.skill import SkillService
 
 
@@ -24,6 +34,8 @@ async def list_skills(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.list"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     skills = await service.list_skills(
         current_user,
@@ -32,8 +44,10 @@ async def list_skills(
         query=q,
         include_inactive=include_inactive,
     )
-    total = await service.skill_repo.count_by_user(
+    total = await service.skill_repo.count_visible(
         current_user.id,
+        current_user.enterprise_id,
+        current_user.team_id,
         query=q,
         include_inactive=include_inactive,
     )
@@ -43,18 +57,47 @@ async def list_skills(
     )
 
 
+@router.get("/cache-policy", response_model=SkillCachePolicyResponse)
+async def get_cache_policy(current_user=Depends(get_current_active_user)):
+    if not has_permission(current_user, "skill.read"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
+    return SkillCachePolicyResponse(
+        cache_ttl_seconds=settings.SKILL_CACHE_TTL_SECONDS,
+        encryption_enabled=settings.ENABLE_LOCAL_CACHE_ENCRYPTION,
+        download_encryption_enabled=settings.ENABLE_SKILL_DOWNLOAD_ENCRYPTION,
+    )
+
+
 @router.post("", response_model=SkillResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=SkillResponse, status_code=status.HTTP_201_CREATED)
 async def create_skill(
+    request: Request,
     payload: SkillCreate,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.create"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     try:
-        skill = await service.create_skill(current_user, payload.name, payload.description, payload.tags)
+        skill = await service.create_skill(
+            current_user,
+            payload.name,
+            payload.description,
+            payload.tags,
+            visibility=payload.visibility,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.create",
+            target=skill.id,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
     return skill
 
 
@@ -64,6 +107,8 @@ async def get_skill(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.read"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     try:
         skill = await service.get_skill(current_user, skill_id)
@@ -79,6 +124,8 @@ async def update_skill(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.update"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     fields = payload.model_dump(exclude_unset=True)
     try:
@@ -94,6 +141,8 @@ async def delete_skill(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.delete"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     try:
         await service.delete_skill(current_user, skill_id)
@@ -110,6 +159,8 @@ async def upload_skill_file(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.upload"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     content = await file.read()
     try:
@@ -125,16 +176,29 @@ async def upload_skill_file(
 
 @router.post("/download", response_model=SkillDownloadResponse)
 async def download_skill(
+    request: Request,
     payload: SkillDownloadRequest,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
+    if not has_permission(current_user, "skill.download"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
         result = await service.download_skill(current_user, payload.skill_id, payload.version)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return SkillDownloadResponse.model_validate(result)
+    response_payload = SkillDownloadResponse.model_validate(result)
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.download",
+            target=payload.skill_id,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
+    return response_payload
 
 
 @router.post("/{skill_id}/deactivate", response_model=SkillResponse)

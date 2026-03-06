@@ -26,6 +26,10 @@ class UserRepository(BaseRepository):
             email=data["email"],
             username=data["username"],
             hashed_password=get_password_hash(password),
+            enterprise_id=data.get("enterprise_id"),
+            team_id=data.get("team_id"),
+            role=data.get("role") or "member",
+            status=data.get("status") or "active",
         )
         self.session.add(user)
         await self.session.commit()

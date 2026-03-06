@@ -101,6 +101,53 @@
 | 现有配置文件 | 扩展而非替换 |
 | 跨平台路径 | 使用 `pathlib.Path` 自动处理 |
 
+### 1.5 企业私有云 P0 落地范围（说明性规范）
+
+> 本节将企业私有云 P0 需求并入项目说明文档，作为实现与验收的统一基线；如与实际代码实现不一致，以代码为准。
+
+#### 范围与目标
+
+- 企业认证与身份映射：LDAP/AD/SSO 接入，支持企业/团队结构映射
+- RBAC 与可见性控制：企业/团队/个人三级可见性并在 API 与 MCP 一致生效
+- MCP/REST 接口契约：`skill://list`、`skill://{id}@{version}`、`execute_skill`、`skills/download`
+- 审计日志：采集、查询、导出（CSV/JSON）
+- 技能版本：自动递增策略与冲突校验
+
+#### 设计要点
+
+**认证与组织映射**
+- 最小字段集合：`enterprise_id`、`user_id`、`team_id`、`role`、`status`
+- 身份源映射：LDAP/AD 组或 SSO Claim 映射到 `role` 与 `team_id`
+- 组织变更：支持用户团队变更时的权限同步与可见性重算
+
+**RBAC 与可见性**
+- 可见性层级：企业级、团队级、个人级
+- 访问规则：企业 > 团队 > 个人，仅允许收窄，不允许越级放大
+- 统一校验：API 与 MCP 入口共用同一权限判定逻辑
+
+**MCP/REST 接口契约**
+- `skill://list`：返回可见技能列表（含 `skill_id`、`name`、`version`、`visible`、`updated_at`）
+- `skill://{id}@{version}`：返回技能元数据、依赖与参数定义
+- `execute_skill`：按版本执行技能，权限按可见性与 RBAC 双重校验
+- `skills/download`：仅对授权用户提供，默认加密传输
+
+**审计日志**
+- 采集点：认证、权限变更、技能上传/下架/回滚/执行/下载、导出
+- 核心字段：`event_id`、`actor_id`、`action`、`target`、`result`、`timestamp`、`ip`、`user_agent`、`metadata`
+- 查询导出：支持按用户/时间/操作过滤，导出 CSV/JSON
+
+**版本自动递增**
+- 默认策略：SemVer patch 递增（可配置）
+- 冲突处理：指定版本已存在时自动 bump 并返回最终版本
+
+#### 交付物与验收
+
+- MCP/REST 接口对齐说明与示例请求
+- RBAC 与可见性模型设计与落地
+- 审计日志查询与导出能力
+- 版本自动递增实现与测试用例
+- 验收标准：API 与 MCP 入口可见性一致生效，审计日志可查询导出，版本策略不产生冲突
+
 ---
 
 ## 2. 系统架构
@@ -664,6 +711,7 @@ class DeprecationNotifier:
 | `/{skill_id}` | PUT | 是 | 更新Skill信息 |
 | `/{skill_id}` | DELETE | 是 | 删除Skill |
 | `/upload` | POST | 是 | 上传Skill文件（multipart，支持 zip 与 metadata） |
+| `/download` | POST | 是 | 下载指定版本Skill压缩包（加密传输） |
 | `/{skill_id}/files` | GET | 是 | 列出Skill文件 |
 | `/{skill_id}/deactivate` | POST | 是 | 下架Skill（写入 cache_revoked_at） |
 | `/{skill_id}/activate` | POST | 是 | 启用Skill |
@@ -676,10 +724,12 @@ class DeprecationNotifier:
 
 - [x] ZIP 上传与版本创建（解析 `SKILL.md` frontmatter：version/dependencies）
 - [x] 版本归档到 `_versions/{version}` 并覆盖为当前版本文件集
+- [x] 未显式提供 version 时自动递增（默认策略：SemVer patch + 1）
 - [x] 版本列表与回滚
 - [x] 下架/启用与缓存失效标记 `cache_revoked_at`
 - [x] 依赖安装指引（策略：客户端安装，返回 dependencies + pip 命令）
 - [x] 版本差异对比（added/removed/modified，小文本 unified diff）
+- [x] Skill 下载（加密传输）：`POST /api/v1/skills/download` 返回 `encrypted_code` + `checksum` + `expires_at`
 
 ### 4.5 Dashboard模块 `/api/v1/dashboard`
 
@@ -757,6 +807,123 @@ class DeprecationNotifier:
 |------|------|------|------|
 | `/mcp` | POST | API Token | HTTP MCP端点 |
 | `/sse` | GET | API Token | SSE MCP端点 |
+
+#### MCP 资源与工具契约（对齐企业 P0）
+
+> MCP 模式下除基础 4 个工具外，还提供 `skill://` 资源描述与 `execute_skill` 工具，用于对齐企业私有云技能服务的接口契约。
+
+| 能力 | 形式 | 名称/URI | 说明 |
+|------|------|----------|------|
+| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（当前实现仅返回用户私有技能） |
+| 技能详情 | Tool（返回 Resource Payload） | `skill_detail_resource` → `skill://{id}@{version}` | 返回技能元数据、依赖与参数定义（来自版本归档的 `SKILL.md`） |
+| 技能执行 | Tool | `execute_skill` | 根据 `SKILL.md` 中的 `command` 或 `entrypoint` 执行技能（受命令白名单限制） |
+| 技能元数据扫描 | Tool | `load_skill_metadata` | 扫描 Skill 目录读取 `SKILL.md` frontmatter |
+| 技能说明加载 | Tool | `load_skill` | 读取指定技能的 `SKILL.md` |
+| 参考文件读取 | Tool | `read_reference_file` | 读取技能目录下的参考文件 |
+| 脚本执行 | Tool | `run_shell_command` | 在技能目录执行命令（白名单限制） |
+
+### 4.7 企业私有云 P0 补充接口（规划）
+
+#### GET `/api/v1/skills/download`
+
+**说明**：按授权与可见性控制下载技能包，默认启用加密传输。
+
+**查询参数**
+
+```json
+{
+  "skill_id": "china-stock-analysis",
+  "version": "1.2.0"
+}
+```
+
+**响应**
+
+```json
+{
+  "download_url": "https://internal/skills/xxx",
+  "expires_at": "2026-03-06T12:00:00Z",
+  "encryption": "AES256-GCM",
+  "checksum": "sha256:..."
+}
+```
+
+**权限说明**
+
+- 仅对具备可见性权限的用户开放
+- 需要 RBAC 权限：`skill.download`
+
+#### GET `/api/v1/audit/logs`
+
+**说明**：审计日志查询接口，支持按用户/时间/操作过滤。
+
+**查询参数**
+
+```json
+{
+  "actor_id": "user_123",
+  "action": "skill.execute",
+  "from": "2026-03-01T00:00:00Z",
+  "to": "2026-03-06T00:00:00Z",
+  "page": 1,
+  "page_size": 20
+}
+```
+
+**响应**
+
+```json
+{
+  "items": [{
+    "event_id": "evt_001",
+    "actor_id": "user_123",
+    "action": "skill.execute",
+    "target": "china-stock-analysis@1.2.0",
+    "result": "success",
+    "timestamp": "2026-03-06T10:12:00Z",
+    "ip": "10.0.0.5",
+    "user_agent": "OpenClaw/1.0",
+    "metadata": {}
+  }],
+  "page": 1,
+  "page_size": 20,
+  "total": 1
+}
+```
+
+**权限说明**
+
+- 仅管理员或具备 `audit.read` 权限的角色可调用
+
+#### POST `/api/v1/audit/logs/export`
+
+**说明**：按过滤条件导出审计日志，支持 CSV/JSON。
+
+**请求体**
+
+```json
+{
+  "format": "csv",
+  "filters": {
+    "actor_id": "user_123",
+    "from": "2026-03-01T00:00:00Z",
+    "to": "2026-03-06T00:00:00Z"
+  }
+}
+```
+
+**响应**
+
+```json
+{
+  "export_url": "https://internal/audit/exports/xxx",
+  "expires_at": "2026-03-06T12:00:00Z"
+}
+```
+
+**权限说明**
+
+- 仅管理员或具备 `audit.export` 权限的角色可调用
 
 ---
 
@@ -1067,6 +1234,26 @@ async def async_execute(self):
     # ... 其余逻辑不变
 ```
 
+### 6.7 Skill 资源接口（`skill://`）补齐
+
+为对齐企业 P0 的 `skill://list` 与 `skill://{id}@{version}` 资源契约，提供两个 Tool 来返回符合 MCP Resource 结构的 payload：
+
+- `skill_list_resource`：返回 `skill://list`
+- `skill_detail_resource`：返回 `skill://{id}@{version}`
+
+资源数据来源：
+- 技能集合：数据库 `skills`（按当前用户过滤，且默认不含已下架技能）
+- 技能元数据：版本归档目录 `_versions/{version}/SKILL.md` 的 frontmatter
+
+### 6.8 ExecuteSkillOp（企业执行契约）
+
+为对齐企业 P0 的 `execute_skill` 工具契约，提供 `execute_skill` Tool：
+
+- 输入：`skill_id`、可选 `version`、可选 `parameters`
+- 执行：从目标版本的 `SKILL.md` 解析 `command` 或 `entrypoint` 推导命令
+- 安全：命令执行受白名单限制，拒绝危险命令
+- 参数：通过环境变量 `SKILL_PARAMS` 传入 JSON 字符串
+
 ---
 
 ## 7. 项目结构
@@ -1111,7 +1298,9 @@ agentskills-mcp/                  # 项目根目录
 │   │   │   ├── load_skill_metadata_op.py
 │   │   │   ├── load_skill_op.py
 │   │   │   ├── read_reference_file_op.py
-│   │   │   └── run_shell_command_op.py
+│   │   │   ├── run_shell_command_op.py
+│   │   │   ├── execute_skill_op.py
+│   │   │   └── skill_resource_ops.py
 │   │   └── utils/
 │   │       ├── __init__.py
 │   │       ├── service_runner.py

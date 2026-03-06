@@ -1,3 +1,10 @@
+---
+status: skipped
+ai_read: false
+skip_reason: "P3需求暂时搁置，不执行"
+last_updated: 2026-03-06
+---
+
 # 执行计划 P3：长期演进与体验优化
 
 **目标**：在核心能力稳定后提升体验、治理与生态扩展能力。  

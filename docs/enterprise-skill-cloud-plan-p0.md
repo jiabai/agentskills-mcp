@@ -1,3 +1,10 @@
+---
+status: skipped
+ai_read: false
+skip_reason: "P0需求已并入 project-spec.md、task_list.md、checklist.md"
+last_updated: 2026-03-06
+---
+
 # 执行计划 P0：基础能力与接口契约
 
 **目标**：在不改变现有基线能力的前提下，补齐企业私有云技能服务的核心可用能力与对外接口契约。  

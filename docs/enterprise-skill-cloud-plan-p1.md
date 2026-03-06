@@ -1,3 +1,10 @@
+---
+status: skipped
+ai_read: false
+skip_reason: "P1需求暂时搁置，不执行"
+last_updated: 2026-03-06
+---
+
 # 执行计划 P1：缓存、存储与性能
 
 **目标**：补齐缓存与对象存储能力，提升可用性与性能指标可达性。  

@@ -1,3 +1,10 @@
+---
+status: skipped
+ai_read: false
+skip_reason: "P2需求暂时搁置，不执行"
+last_updated: 2026-03-06
+---
+
 # 执行计划 P2：增强安全与运营优化
 
 **目标**：在 P0 与 P1 的基础上补齐增强安全能力与运营稳定性优化。  

@@ -26,6 +26,9 @@ from mcp_agentskills.api.mcp.sse_handler import (
 )
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.utils.user_context import set_current_user_id
+from mcp_agentskills.core.security.jwt_utils import decode_token
+from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.user import UserRepository
 _mcp_app: Any | None = None
 _mcp_service: Any | None = None
 _initialized = False
@@ -82,11 +85,31 @@ async def _authorize_mcp_request(scope: Scope, receive: Receive, send: Send) -> 
     access_token, error = await verifier.verify_token_with_error(token)
     if access_token:
         return True
-    if error:
-        code, detail = error
-        await _send_error(scope, receive, send, detail, code)
+    try:
+        payload = decode_token(token)
+    except ValueError:
+        if error:
+            code, detail = error
+            await _send_error(scope, receive, send, detail, code)
+            return False
+        await _send_error(scope, receive, send, "Token not found", "TOKEN_NOT_FOUND")
         return False
-    await _send_error(scope, receive, send, "Token not found", "TOKEN_NOT_FOUND")
+    if payload.get("type") != "access":
+        await _send_error(scope, receive, send, "Invalid token type", "INVALID_TOKEN_TYPE")
+        return False
+    user_id = payload.get("sub")
+    if not user_id:
+        await _send_error(scope, receive, send, "Invalid token", "INVALID_TOKEN")
+        return False
+    async for session in get_async_session():
+        repo = UserRepository(session)
+        user = await repo.get_by_id(user_id)
+        if not user or not user.is_active:
+            await _send_error(scope, receive, send, "User not found", "USER_NOT_FOUND")
+            return False
+        set_current_user_id(str(user.id))
+        return True
+    await _send_error(scope, receive, send, "User not found", "USER_NOT_FOUND")
     return False
 
 

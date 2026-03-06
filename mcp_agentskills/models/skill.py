@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from mcp_agentskills.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -13,6 +13,7 @@ class Skill(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(500), default="")
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
     skill_dir: Mapped[str] = mapped_column(String(500))
     current_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

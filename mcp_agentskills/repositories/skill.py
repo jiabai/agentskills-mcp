@@ -1,6 +1,6 @@
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 
 from mcp_agentskills.models.skill import Skill
 from mcp_agentskills.repositories.base import BaseRepository
@@ -30,7 +30,13 @@ class SkillRepository(BaseRepository):
             stmt = stmt.where(Skill.is_active.is_(True))
         if query:
             pattern = f"%{query}%"
-            stmt = stmt.where(or_(Skill.name.ilike(pattern), Skill.description.ilike(pattern)))
+            stmt = stmt.where(
+                or_(
+                    Skill.name.ilike(pattern),
+                    Skill.description.ilike(pattern),
+                    cast(Skill.tags, String).ilike(pattern),
+                )
+            )
         stmt = stmt.offset(skip).limit(limit)
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -41,7 +47,13 @@ class SkillRepository(BaseRepository):
             stmt = stmt.where(Skill.is_active.is_(True))
         if query:
             pattern = f"%{query}%"
-            stmt = stmt.where(or_(Skill.name.ilike(pattern), Skill.description.ilike(pattern)))
+            stmt = stmt.where(
+                or_(
+                    Skill.name.ilike(pattern),
+                    Skill.description.ilike(pattern),
+                    cast(Skill.tags, String).ilike(pattern),
+                )
+            )
         result = await self.session.execute(stmt)
         return int(result.scalar_one())
 

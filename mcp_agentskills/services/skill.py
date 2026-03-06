@@ -1,11 +1,17 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import base64
 import difflib
+import hashlib
 import io
 import json
+import os
 from pathlib import Path
 import re
 import shutil
 import zipfile
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+import yaml
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.utils.skill_storage import (
@@ -56,7 +62,7 @@ class SkillService:
             raise ValueError("Skill not found")
         return skill
 
-    async def create_skill(self, user: User, name: str, description: str) -> Skill:
+    async def create_skill(self, user: User, name: str, description: str, tags: list[str]) -> Skill:
         valid, error = validate_skill_name(name)
         if not valid:
             raise ValueError(error)
@@ -67,6 +73,7 @@ class SkillService:
             user_id=user.id,
             name=name,
             description=description,
+            tags=tags,
             skill_dir=str(path),
         )
 
@@ -161,31 +168,22 @@ class SkillService:
 
     @staticmethod
     def _parse_frontmatter(content: str) -> dict:
-        parts = content.split("---")
+        stripped = content.lstrip()
+        if not stripped.startswith("---"):
+            return {}
+        parts = stripped.split("---", 2)
         if len(parts) < 3:
             return {}
         frontmatter_text = parts[1].strip()
-        metadata: dict[str, object] = {}
-        for line in frontmatter_text.split("\n"):
-            line = line.strip()
-            if not line or ":" not in line:
-                continue
-            key, value = line.split(":", 1)
-            key = key.strip()
-            value = value.strip().strip("\"'")
-            if key == "dependencies":
-                if value.startswith("[") and value.endswith("]"):
-                    value = value[1:-1]
-                deps = [item.strip().strip("\"'") for item in value.split(",") if item.strip()]
-                metadata[key] = deps
-            elif key == "dependency_spec":
-                try:
-                    metadata[key] = json.loads(value)
-                except Exception:
-                    metadata[key] = value
-            else:
-                metadata[key] = value
-        return metadata
+        if not frontmatter_text:
+            return {}
+        try:
+            parsed = yaml.safe_load(frontmatter_text)
+        except yaml.YAMLError:
+            return {}
+        if isinstance(parsed, dict):
+            return parsed
+        return {}
 
     @staticmethod
     def _validate_version(version: str) -> str:
@@ -223,6 +221,19 @@ class SkillService:
         return items
 
     @staticmethod
+    def _build_encryption_key(value: str) -> bytes:
+        return hashlib.sha256(value.encode("utf-8")).digest()
+
+    @staticmethod
+    def _encrypt_payload(payload: bytes) -> tuple[str, str]:
+        key = SkillService._build_encryption_key(settings.SECRET_KEY)
+        nonce = os.urandom(12)
+        encrypted = nonce + AESGCM(key).encrypt(nonce, payload, None)
+        encoded = base64.b64encode(encrypted).decode("utf-8")
+        checksum = hashlib.sha256(encrypted).hexdigest()
+        return encoded, f"sha256:{checksum}"
+
+    @staticmethod
     def _normalize_dependency_spec(value: object) -> dict | None:
         if isinstance(value, dict):
             return value
@@ -234,6 +245,32 @@ class SkillService:
             if isinstance(parsed, dict):
                 return parsed
         return None
+
+    @staticmethod
+    def _parse_semver(version: str) -> tuple[str, int, int, int] | None:
+        match = re.fullmatch(r"(v)?(\d+)\.(\d+)\.(\d+)", version)
+        if not match:
+            return None
+        prefix = "v" if match.group(1) else ""
+        return prefix, int(match.group(2)), int(match.group(3)), int(match.group(4))
+
+    async def _next_version(self, skill: Skill, repo: SkillVersionRepository) -> str:
+        candidates: list[str] = []
+        if skill.current_version:
+            candidates.append(skill.current_version)
+        versions = await repo.list_by_skill(skill.id)
+        candidates.extend([record.version for record in versions if record.version])
+        parsed_versions = [self._parse_semver(item) for item in candidates]
+        semvers = [item for item in parsed_versions if item is not None]
+        if not semvers:
+            return "1.0.0"
+        prefix, major, minor, patch = max(semvers, key=lambda item: (item[1], item[2], item[3]))
+        next_patch = patch + 1
+        next_version = f"{prefix}{major}.{minor}.{next_patch}"
+        while await repo.get_by_version(skill.id, next_version):
+            next_patch += 1
+            next_version = f"{prefix}{major}.{minor}.{next_patch}"
+        return next_version
 
     @staticmethod
     def _build_python_commands(manager: str, requirements: list[str], files: list[str]) -> list[str]:
@@ -264,6 +301,42 @@ class SkillService:
         repo = self._require_version_repo()
         skill = await self.get_skill(user, skill_id)
         return await repo.list_by_skill(skill.id)
+
+    async def download_skill(self, user: User, skill_id: str, version: str | None = None) -> dict:
+        repo = self._require_version_repo()
+        skill = await self.get_skill(user, skill_id)
+        self._ensure_active(skill)
+        target_version = version or skill.current_version or ""
+        if not target_version:
+            latest = await repo.list_by_skill(skill.id)
+            if latest:
+                target_version = latest[0].version
+        if not target_version:
+            raise ValueError("Version not found")
+        target_version = self._validate_version(target_version)
+        record = await repo.get_by_version(skill.id, target_version)
+        if not record:
+            raise ValueError("Version not found")
+        base_dir = get_skill_versions_dir(user.id, skill.name)
+        version_dir = (base_dir / target_version).resolve()
+        if not version_dir.exists():
+            raise ValueError("Version files not found")
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for file_path in version_dir.rglob("*"):
+                if not file_path.is_file():
+                    continue
+                relative = file_path.relative_to(version_dir)
+                archive.write(file_path, arcname=relative.as_posix())
+        encrypted_code, checksum = self._encrypt_payload(buffer.getvalue())
+        expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+        return {
+            "skill_id": skill.id,
+            "version": target_version,
+            "encrypted_code": encrypted_code,
+            "checksum": checksum,
+            "expires_at": expires_at,
+        }
 
     async def get_install_instructions(self, user: User, skill_id: str, version: str) -> dict:
         repo = self._require_version_repo()
@@ -436,9 +509,9 @@ class SkillService:
                     raise ValueError("Invalid metadata") from exc
                 if isinstance(parsed, dict):
                     metadata = parsed
-            version = str(metadata.get("version") or frontmatter.get("version") or "")
+            version = str(metadata.get("version") or frontmatter.get("version") or "").strip()
             if not version:
-                version = datetime.now(timezone.utc).strftime("v%Y%m%d%H%M%S")
+                version = await self._next_version(skill, repo)
             version = self._validate_version(version)
             existing = await repo.get_by_version(skill.id, version)
             if existing:

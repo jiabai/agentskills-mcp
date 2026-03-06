@@ -11,6 +11,7 @@ export type Skill = {
   id: string
   name: string
   description: string | null
+  tags?: string[]
   created_at?: string
   updated_at?: string
 }
@@ -255,10 +256,10 @@ export const api = {
     apiFetch("/api/v1/users/me", { method: "DELETE", body: JSON.stringify(payload) }),
   listSkills: (query?: string) =>
     apiFetch<{ items: Skill[]; total: number }>(`/api/v1/skills${query ? `?q=${encodeURIComponent(query)}` : ""}`),
-  createSkill: (payload: { name: string; description?: string | null }) =>
+  createSkill: (payload: { name: string; description?: string | null; tags?: string[] }) =>
     apiFetch<Skill>("/api/v1/skills", { method: "POST", body: JSON.stringify(payload) }),
   getSkill: (skillId: string) => apiFetch<Skill>(`/api/v1/skills/${skillId}`),
-  updateSkill: (skillId: string, payload: { name?: string; description?: string | null }) =>
+  updateSkill: (skillId: string, payload: { name?: string; description?: string | null; tags?: string[] }) =>
     apiFetch<Skill>(`/api/v1/skills/${skillId}`, { method: "PUT", body: JSON.stringify(payload) }),
   deleteSkill: (skillId: string) => apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" }),
   listSkillFiles: (skillId: string) => apiFetch<string[]>(`/api/v1/skills/${skillId}/files`),

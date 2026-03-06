@@ -1,0 +1,16 @@
+from datetime import datetime
+
+from pydantic import BaseModel
+
+
+class SkillDownloadRequest(BaseModel):
+    skill_id: str
+    version: str | None = None
+
+
+class SkillDownloadResponse(BaseModel):
+    skill_id: str
+    version: str
+    encrypted_code: str
+    checksum: str
+    expires_at: datetime

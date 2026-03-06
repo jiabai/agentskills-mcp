@@ -4,6 +4,7 @@ from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.skill import SkillRepository
 from mcp_agentskills.repositories.skill_version import SkillVersionRepository
+from mcp_agentskills.schemas.skill_download import SkillDownloadRequest, SkillDownloadResponse
 from mcp_agentskills.schemas.skill_lifecycle import SkillInstallInstructionsResponse, SkillVersionDiffResponse
 from mcp_agentskills.schemas.skill import SkillCreate, SkillListResponse, SkillResponse, SkillUpdate
 from mcp_agentskills.schemas.skill_version import SkillVersionListResponse, SkillVersionResponse
@@ -51,7 +52,7 @@ async def create_skill(
 ):
     service = SkillService(SkillRepository(session))
     try:
-        skill = await service.create_skill(current_user, payload.name, payload.description)
+        skill = await service.create_skill(current_user, payload.name, payload.description, payload.tags)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return skill
@@ -120,6 +121,20 @@ async def upload_skill_file(
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return {"filename": filename}
+
+
+@router.post("/download", response_model=SkillDownloadResponse)
+async def download_skill(
+    payload: SkillDownloadRequest,
+    current_user=Depends(get_current_active_user),
+    session=Depends(get_async_session),
+):
+    service = SkillService(SkillRepository(session), SkillVersionRepository(session))
+    try:
+        result = await service.download_skill(current_user, payload.skill_id, payload.version)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return SkillDownloadResponse.model_validate(result)
 
 
 @router.post("/{skill_id}/deactivate", response_model=SkillResponse)

@@ -466,3 +466,153 @@ async def test_skill_versions_diff_returns_modified_files(client, tmp_path, monk
     assert "reference.md" in modified
     assert "-first" in modified["reference.md"]
     assert "+second" in modified["reference.md"]
+
+
+@pytest.mark.asyncio
+async def test_skill_version_auto_increment(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "auto@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "auto@example.com", "username": "auto", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "auto@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "auto@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skillauto", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    first = io.BytesIO()
+    with zipfile.ZipFile(first, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skillauto\ndescription: auto\n---\nfirst")
+    first.seek(0)
+    uploaded_first = await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", first.read(), "application/zip")},
+        headers=headers,
+    )
+    assert uploaded_first.status_code == 201
+    assert uploaded_first.json()["version"] == "1.0.0"
+    second = io.BytesIO()
+    with zipfile.ZipFile(second, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skillauto\ndescription: auto\n---\nsecond")
+    second.seek(0)
+    uploaded_second = await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", second.read(), "application/zip")},
+        headers=headers,
+    )
+    assert uploaded_second.status_code == 201
+    assert uploaded_second.json()["version"] == "1.0.1"
+    versions = await client.get(f"/api/v1/skills/{skill_id}/versions", headers=headers)
+    items = versions.json()["items"]
+    assert items[0]["version"] == "1.0.1"
+    assert items[1]["version"] == "1.0.0"
+
+
+@pytest.mark.asyncio
+async def test_skill_search_by_tag(client):
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "tag@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "tag@example.com", "username": "tagger", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "tag@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "tag@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    first = await client.post(
+        "/api/v1/skills",
+        json={"name": "skilltag1", "description": "desc", "tags": ["vision", "nlp"]},
+        headers=headers,
+    )
+    assert first.status_code == 201
+    assert "vision" in first.json()["tags"]
+    await client.post(
+        "/api/v1/skills",
+        json={"name": "skilltag2", "description": "desc", "tags": ["audio"]},
+        headers=headers,
+    )
+    listed = await client.get("/api/v1/skills?q=vision", headers=headers)
+    assert listed.status_code == 200
+    payload = listed.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["name"] == "skilltag1"
+    assert "vision" in payload["items"][0]["tags"]
+
+
+@pytest.mark.asyncio
+async def test_skill_dependency_spec_frontmatter_yaml(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "yaml@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "yaml@example.com", "username": "yamluser", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "yaml@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "yaml@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skillyaml", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(
+            "SKILL.md",
+            "---\nname: skillyaml\ndescription: dep\nversion: 2.0.0\ndependency_spec:\n  schema_version: 1\n  python:\n    manager: poetry\n    requirements:\n      - requests==2.31.0\n    files: []\n  system:\n    packages:\n      - git\n    notes: needed\n---\nbody",
+        )
+    buffer.seek(0)
+    uploaded = await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", buffer.read(), "application/zip")},
+        headers=headers,
+    )
+    assert uploaded.status_code == 201
+    response = await client.get(
+        f"/api/v1/skills/{skill_id}/versions/2.0.0/install-instructions",
+        headers=headers,
+    )
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ecosystem"] == "python"
+    assert payload["commands"] == ["poetry install"]
+    assert payload["dependency_spec"]["python"]["manager"] == "poetry"
+    assert "git" in payload["dependency_spec"]["system"]["packages"]

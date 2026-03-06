@@ -9,7 +9,7 @@ class SkillVersionRepository(BaseRepository):
         result = await self.session.execute(
             select(SkillVersion)
             .where(SkillVersion.skill_id == skill_id)
-            .order_by(SkillVersion.created_at.desc()),
+            .order_by(SkillVersion.created_at.desc(), SkillVersion.version.desc()),
         )
         return list(result.scalars().all())
 

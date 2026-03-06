@@ -14,6 +14,6 @@
 
 ## 企业私有云需求草案
 - 需求蓝图（未实现）：[enterprise-skill-cloud-requirements.md](./enterprise-skill-cloud-requirements.md)
-- 差异清单：[enterprise-skill-cloud-gap-analysis.md](./enterprise-skill-cloud-gap-analysis.md)
+- 能力状态与差异口径（已并入）：[project-spec.md](./project-spec.md) 第 1.5 节
 - P0 落地说明（已并入说明文档与清单）：[project-spec.md](./project-spec.md)、[task_list.md](./task_list.md)、[checklist.md](./checklist.md)
 - 执行计划（P0 已标记跳过）：P0 [enterprise-skill-cloud-plan-p0.md](./enterprise-skill-cloud-plan-p0.md)｜P1 [enterprise-skill-cloud-plan-p1.md](./enterprise-skill-cloud-plan-p1.md)｜P2 [enterprise-skill-cloud-plan-p2.md](./enterprise-skill-cloud-plan-p2.md)｜P3 [enterprise-skill-cloud-plan-p3.md](./enterprise-skill-cloud-plan-p3.md)

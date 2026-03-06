@@ -104,6 +104,7 @@
 ### 1.5 企业私有云 P0 落地范围（说明性规范）
 
 > 本节将企业私有云 P0 需求并入项目说明文档，作为实现与验收的统一基线；如与实际代码实现不一致，以代码为准。
+> 维护口径：企业私有云能力状态、差异判断与落地优先级统一维护在本文件（不再维护独立差异清单）。
 
 #### 范围与目标
 
@@ -133,12 +134,19 @@
 
 **审计日志**
 - 采集点：认证、权限变更、技能上传/下架/回滚/执行/下载、导出
-- 核心字段：`event_id`、`actor_id`、`action`、`target`、`result`、`timestamp`、`ip`、`user_agent`、`metadata`
+- 核心字段：`id`、`actor_id`、`action`、`target`、`result`、`timestamp`、`ip`、`user_agent`、`metadata`
 - 查询导出：支持按用户/时间/操作过滤，导出 CSV/JSON
 
 **版本自动递增**
-- 默认策略：SemVer patch 递增（可配置）
+- 默认策略：SemVer patch 递增（当前实现为固定策略）
 - 冲突处理：指定版本已存在时自动 bump 并返回最终版本
+
+#### 当前实现边界（截至 2026-03）
+
+- 已知偏差：`skill_list_resource` 的 `visible` 字段尚未完全反映真实可见性。
+- 部分实现：审计采集点已覆盖核心链路，但未达到“认证/权限/技能操作全覆盖”。
+- 待增强：版本自动递增策略已实现冲突处理，但尚未配置化。
+- 未实现：MFA、WORM 审计、客户端缓存过期清理与离线降级、技能主文件对象存储化。
 
 #### 交付物与验收
 
@@ -805,8 +813,8 @@ class DeprecationNotifier:
 
 | 端点 | 方法 | 认证 | 描述 |
 |------|------|------|------|
-| `/mcp` | POST | API Token | HTTP MCP端点 |
-| `/sse` | GET | API Token | SSE MCP端点 |
+| `/mcp` | POST | API Token（主）/ JWT（兼容） | HTTP MCP端点 |
+| `/sse` | GET | API Token（主）/ JWT（兼容） | SSE MCP端点 |
 
 #### MCP 资源与工具契约（对齐企业 P0）
 
@@ -814,7 +822,7 @@ class DeprecationNotifier:
 
 | 能力 | 形式 | 名称/URI | 说明 |
 |------|------|----------|------|
-| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（当前实现仅返回用户私有技能） |
+| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（支持可见性过滤；当前 `visible` 字段存在已知偏差，见 1.5 节“当前实现边界”） |
 | 技能详情 | Tool（返回 Resource Payload） | `skill_detail_resource` → `skill://{id}@{version}` | 返回技能元数据、依赖与参数定义（来自版本归档的 `SKILL.md`） |
 | 技能执行 | Tool | `execute_skill` | 根据 `SKILL.md` 中的 `command` 或 `entrypoint` 执行技能（受命令白名单限制） |
 | 技能元数据扫描 | Tool | `load_skill_metadata` | 扫描 Skill 目录读取 `SKILL.md` frontmatter |
@@ -822,13 +830,13 @@ class DeprecationNotifier:
 | 参考文件读取 | Tool | `read_reference_file` | 读取技能目录下的参考文件 |
 | 脚本执行 | Tool | `run_shell_command` | 在技能目录执行命令（白名单限制） |
 
-### 4.7 企业私有云 P0 补充接口（规划）
+### 4.7 企业私有云 P0 补充接口（实现对齐）
 
-#### GET `/api/v1/skills/download`
+#### POST `/api/v1/skills/download`
 
 **说明**：按授权与可见性控制下载技能包，默认启用加密传输。
 
-**查询参数**
+**请求体**
 
 ```json
 {
@@ -841,10 +849,12 @@ class DeprecationNotifier:
 
 ```json
 {
-  "download_url": "https://internal/skills/xxx",
+  "skill_id": "china-stock-analysis",
+  "version": "1.2.0",
+  "encrypted_code": "base64(...)",
   "expires_at": "2026-03-06T12:00:00Z",
-  "encryption": "AES256-GCM",
-  "checksum": "sha256:..."
+  "checksum": "sha256:...",
+  "cache_ttl_seconds": 604800
 }
 ```
 
@@ -863,10 +873,10 @@ class DeprecationNotifier:
 {
   "actor_id": "user_123",
   "action": "skill.execute",
-  "from": "2026-03-01T00:00:00Z",
-  "to": "2026-03-06T00:00:00Z",
-  "page": 1,
-  "page_size": 20
+  "start": "2026-03-01T00:00:00Z",
+  "end": "2026-03-06T00:00:00Z",
+  "skip": 0,
+  "limit": 20
 }
 ```
 
@@ -875,7 +885,7 @@ class DeprecationNotifier:
 ```json
 {
   "items": [{
-    "event_id": "evt_001",
+    "id": "evt_001",
     "actor_id": "user_123",
     "action": "skill.execute",
     "target": "china-stock-analysis@1.2.0",
@@ -884,10 +894,7 @@ class DeprecationNotifier:
     "ip": "10.0.0.5",
     "user_agent": "OpenClaw/1.0",
     "metadata": {}
-  }],
-  "page": 1,
-  "page_size": 20,
-  "total": 1
+  }]
 }
 ```
 
@@ -906,8 +913,8 @@ class DeprecationNotifier:
   "format": "csv",
   "filters": {
     "actor_id": "user_123",
-    "from": "2026-03-01T00:00:00Z",
-    "to": "2026-03-06T00:00:00Z"
+    "start": "2026-03-01T00:00:00Z",
+    "end": "2026-03-06T00:00:00Z"
   }
 }
 ```
@@ -916,8 +923,8 @@ class DeprecationNotifier:
 
 ```json
 {
-  "export_url": "https://internal/audit/exports/xxx",
-  "expires_at": "2026-03-06T12:00:00Z"
+  "format": "csv",
+  "content": "id,actor_id,action,..."
 }
 ```
 

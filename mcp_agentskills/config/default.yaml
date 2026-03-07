@@ -26,6 +26,15 @@ flow:
   run_shell_command:
     flow_content: RunShellCommandOp()
 
+  skill_list_resource:
+    flow_content: SkillListResourceOp()
+
+  skill_detail_resource:
+    flow_content: SkillDetailResourceOp()
+
+  execute_skill:
+    flow_content: ExecuteSkillOp()
+
 llm:
   default:
     backend: openai_compatible

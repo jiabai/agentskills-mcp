@@ -178,14 +178,14 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 - 查询导出：支持按用户/时间/操作过滤，导出 CSV/JSON
 
 **版本自动递增**
-- 默认策略：SemVer patch 递增（当前实现为固定策略）
+- 默认策略：SemVer patch 递增（可通过 `SKILL_VERSION_BUMP_STRATEGY` 配置 `patch/minor`）
 - 冲突处理：指定版本已存在时自动 bump 并返回最终版本
 
 #### 当前实现边界（截至 2026-03）
 
 - 已知偏差：`skill_list_resource` 的 `visible` 字段尚未完全反映真实可见性。
 - 部分实现：审计采集点已覆盖核心链路，但未达到“认证/权限/技能操作全覆盖”。
-- 待增强：版本自动递增策略已实现冲突处理，但尚未配置化。
+- 已实现：版本自动递增策略支持 `patch/minor` 配置并包含冲突处理。
 - 未实现：MFA、WORM 审计、客户端缓存过期清理与离线降级、技能主文件对象存储化。
 
 #### 差距闭环与验收门槛
@@ -194,7 +194,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 |------|---------|-----------|---------|
 | `skill://list.visible` 与真实可见性对齐 | 部分完成 | checklist 17.3 第 1 项 | API 与 MCP 返回可见性一致，且含企业/团队/个人三层校验用例 |
 | 审计采集全覆盖 | 部分完成 | checklist 17.4 第 1 项 | 认证、权限、技能上传/下架/回滚/执行/下载均产生日志并可查询 |
-| 版本自动递增策略配置化 | 部分完成 | checklist 17.5 第 1 项 | 可按环境配置策略（至少 patch/minor），冲突处理可预测且有测试 |
+| 版本自动递增策略配置化 | 已完成 | checklist 17.5 第 1 项 | 可按环境配置策略（至少 patch/minor），冲突处理可预测且有测试 |
 
 #### 维护与判定规则（统一口径）
 

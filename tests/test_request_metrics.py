@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import func, select
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.logging import _should_track_request
 from mcp_agentskills.models.request_metric import RequestMetric
 from mcp_agentskills.repositories.request_metric import RequestMetricRepository
@@ -48,3 +49,52 @@ async def test_cleanup_before_removes_old_metrics(async_session):
         select(func.count()).select_from(RequestMetric).where(RequestMetric.user_id == "user")
     )
     assert int(result.scalar_one()) == 1
+
+
+@pytest.mark.asyncio
+async def test_rate_limit_toggle_controls_middleware(client):
+    original_enable = settings.ENABLE_RATE_LIMIT
+    original_limit = settings.RATE_LIMIT_REQUESTS
+    original_window = settings.RATE_LIMIT_WINDOW
+    settings.ENABLE_RATE_LIMIT = True
+    settings.RATE_LIMIT_REQUESTS = 1
+    settings.RATE_LIMIT_WINDOW = 60
+    try:
+        first = await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "rl-enable-1@example.com", "purpose": "register"},
+        )
+        second = await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "rl-enable-2@example.com", "purpose": "register"},
+        )
+        assert first.status_code != 429
+        assert second.status_code == 429
+        assert second.json()["code"] == "RATE_LIMIT_EXCEEDED"
+
+        settings.ENABLE_RATE_LIMIT = False
+        third = await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "rl-disable-1@example.com", "purpose": "register"},
+        )
+        fourth = await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "rl-disable-2@example.com", "purpose": "register"},
+        )
+        assert third.status_code != 429
+        assert fourth.status_code != 429
+    finally:
+        settings.ENABLE_RATE_LIMIT = original_enable
+        settings.RATE_LIMIT_REQUESTS = original_limit
+        settings.RATE_LIMIT_WINDOW = original_window
+
+
+@pytest.mark.asyncio
+async def test_metrics_endpoint_respects_enable_metrics_toggle(client):
+    original_enable = settings.ENABLE_METRICS
+    settings.ENABLE_METRICS = False
+    try:
+        response = await client.get("/metrics")
+        assert response.status_code == 404
+    finally:
+        settings.ENABLE_METRICS = original_enable

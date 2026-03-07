@@ -28,13 +28,13 @@
 
 ## 术语说明
 
-- `skill_dir`: 指 FlowLLM 的 `C.service_config.metadata["skill_dir"]`，4 个 MCP 工具均基于该路径读写 Skill 文件
+- `skill_dir`: 指 FlowLLM 的 `C.service_config.metadata["skill_dir"]`，基础 4 个 MCP 工具均基于该路径读写 Skill 文件
 - FastAPI 模式: 启动时会将 `skill_dir` 设置为 `SKILL_STORAGE_PATH`（环境变量），两者等价
 - 本地 stdio/SSE 模式: `skill_dir` 通常来自 FlowLLM 配置项 `metadata.skill_dir`，可与 `SKILL_STORAGE_PATH` 不同
 
 ---
 
-AgentSkills MCP 提供 4 个工具用于加载 Agent Skills，并参考 [Anthropic 的 Agent Skills 工程实践](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) 来实现 *Progressive Disclosure* 架构。
+AgentSkills MCP 提供 7 个工具：基础 4 个技能文件工具 + 企业接口对齐 3 个资源/执行工具，并参考 [Anthropic 的 Agent Skills 工程实践](https://www.anthropic.com/engineering/equipping-agents-for-the-real-world-with-agent-skills) 来实现 *Progressive Disclosure* 架构。
 
 ---
 
@@ -271,6 +271,85 @@ str: On success, returns the combined stdout and stderr output from the command 
 ```bash
 python tests/test_run_shell_command_op.py <path/to/skills> <skill_name> <command>
 ```
+
+---
+
+## Tool 5: skill_list_resource
+
+<p align="left">
+  <em>Return MCP Resource payload for `skill://list`.</em>
+</p>
+
+### Description
+
+返回当前用户可见技能列表，输出 MCP Resource 结构，`uri` 为 `skill://list`。
+
+### Input Parameters
+
+该工具无输入参数。
+
+### Returns
+
+`str`：JSON 字符串，格式为：
+
+```json
+{
+  "contents": [
+    {
+      "uri": "skill://list",
+      "mimeType": "application/json",
+      "text": "{\"skills\": [...]}"
+    }
+  ]
+}
+```
+
+---
+
+## Tool 6: skill_detail_resource
+
+<p align="left">
+  <em>Return MCP Resource payload for `skill://{id}@{version}`.</em>
+</p>
+
+### Description
+
+返回技能详情资源，包含版本、依赖、参数定义与可见性信息。
+
+### Input Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `skill_id` | string | Yes | - | Skill ID |
+| `version` | string | No | 当前版本/最新版本 | 目标版本 |
+
+### Returns
+
+`str`：JSON 字符串，`uri` 形如 `skill://{skill_id}@{version}`，`text` 为技能详情 JSON。
+
+---
+
+## Tool 7: execute_skill
+
+<p align="left">
+  <em>Execute a skill by version with RBAC and visibility checks.</em>
+</p>
+
+### Description
+
+按 `skill_id` 与可选 `version` 执行技能。执行命令从目标版本 `SKILL.md` 的 `command` 或 `entrypoint` 推导，受命令白名单限制；输入参数通过 `SKILL_PARAMS` 注入环境变量。
+
+### Input Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `skill_id` | string | Yes | - | Skill ID |
+| `version` | string | No | 当前版本/最新版本 | 目标版本 |
+| `parameters` | object | No | `{}` | 技能执行参数 |
+
+### Returns
+
+`str`：JSON 字符串，包含 `status`、`output`、`execution_time_ms`。
 
 ---
 

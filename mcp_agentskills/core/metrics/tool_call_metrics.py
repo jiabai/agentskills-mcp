@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.request_metric import RequestMetricRepository
@@ -46,6 +47,8 @@ def _is_error_output(output: object) -> bool:
 
 
 async def record_tool_call(tool_name: str, output: object = None, exception: Exception | None = None) -> None:
+    if not settings.ENABLE_METRICS:
+        return
     user_id = get_current_user_id()
     if not user_id:
         return

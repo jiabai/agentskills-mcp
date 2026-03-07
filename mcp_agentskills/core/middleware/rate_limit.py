@@ -18,6 +18,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         self._window = settings.RATE_LIMIT_WINDOW
 
     async def dispatch(self, request: Request, call_next):
+        if not settings.ENABLE_RATE_LIMIT:
+            return await call_next(request)
         client = request.client.host if request.client else "unknown"
         now = time.monotonic()
         async with self._lock:

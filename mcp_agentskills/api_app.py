@@ -93,6 +93,8 @@ def create_application() -> FastAPI:
 
     @application.get("/metrics")
     async def metrics():
+        if not settings.ENABLE_METRICS:
+            raise HTTPException(status_code=404, detail="Metrics disabled")
         db_connected = await _check_db_connection()
         skill_path = Path(settings.SKILL_STORAGE_PATH)
         disk_root = skill_path if skill_path.exists() else skill_path.parent

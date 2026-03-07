@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 import pytest
 from sqlalchemy import func, select
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.metrics.tool_call_metrics import (
     record_tool_call,
     reset_session_provider,
@@ -44,3 +45,28 @@ async def test_tool_call_metrics_use_hour_bucket_counts(async_session):
         select(func.coalesce(func.sum(RequestMetric.total_count), 0)).where(RequestMetric.user_id == user.id)
     )
     assert int(result.scalar_one()) == 2
+
+
+@pytest.mark.asyncio
+async def test_tool_call_metrics_disabled_by_enable_metrics(async_session):
+    user_repo = UserRepository(async_session)
+    user = await user_repo.create(email="tool-metric-off@example.com", username="toolmetricoff", password="pass1234")
+
+    async def session_provider():
+        yield async_session
+
+    original_enable = settings.ENABLE_METRICS
+    settings.ENABLE_METRICS = False
+    set_session_provider(session_provider)
+    set_current_user_id(str(user.id))
+    try:
+        await record_tool_call("load_skill", output="ok")
+    finally:
+        settings.ENABLE_METRICS = original_enable
+        set_current_user_id(None)
+        reset_session_provider()
+
+    result = await async_session.execute(
+        select(func.coalesce(func.sum(RequestMetric.total_count), 0)).where(RequestMetric.user_id == user.id)
+    )
+    assert int(result.scalar_one()) == 0

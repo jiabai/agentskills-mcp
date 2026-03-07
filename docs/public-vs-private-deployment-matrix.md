@@ -40,10 +40,6 @@
 | ENABLE_NETWORK_EGRESS_CONTROL | 外网访问控制 | 可选 | true | 运行隔离 |
 | ENABLE_RATE_LIMIT | API 限流 | true | true | API 网关 |
 | ENABLE_METRICS | 指标采集 | true | true | 监控 |
-| ENABLE_ALERTING | 告警通知 | false | true | 监控 |
-| ENABLE_OBJECT_STORAGE | 对象存储 | true | true | 存储 |
-| ENABLE_PRIVATE_STORAGE | 私有存储后端 | false | true | 存储 |
-| ENABLE_MULTI_TENANT | 多租户支持 | true | true | 全局 |
 
 ## 部署建议
 

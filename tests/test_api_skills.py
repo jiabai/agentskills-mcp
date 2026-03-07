@@ -586,6 +586,117 @@ async def test_skill_version_auto_increment_with_minor_strategy(client, tmp_path
 
 
 @pytest.mark.asyncio
+async def test_skill_version_conflict_auto_bump_patch_strategy(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "conflict-patch@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "conflict-patch@example.com", "username": "conflict-patch", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "conflict-patch@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "conflict-patch@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skillconflictpatch", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    first = io.BytesIO()
+    with zipfile.ZipFile(first, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skillconflictpatch\nversion: 1.0.0\n---\nfirst")
+    first.seek(0)
+    uploaded_first = await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", first.read(), "application/zip")},
+        headers=headers,
+    )
+    assert uploaded_first.status_code == 201
+    assert uploaded_first.json()["version"] == "1.0.0"
+    second = io.BytesIO()
+    with zipfile.ZipFile(second, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skillconflictpatch\nversion: 1.0.0\n---\nsecond")
+    second.seek(0)
+    uploaded_second = await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_id": skill_id},
+        files={"file": ("skill.zip", second.read(), "application/zip")},
+        headers=headers,
+    )
+    assert uploaded_second.status_code == 201
+    assert uploaded_second.json()["version"] == "1.0.1"
+
+
+@pytest.mark.asyncio
+async def test_skill_version_conflict_auto_bump_minor_strategy(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    original_strategy = settings.SKILL_VERSION_BUMP_STRATEGY
+    settings.SKILL_VERSION_BUMP_STRATEGY = "minor"
+    try:
+        await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "conflict-minor@example.com", "purpose": "register"},
+        )
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "conflict-minor@example.com", "username": "conflict-minor", "code": "123456"},
+        )
+        await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "conflict-minor@example.com", "purpose": "login"},
+        )
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "conflict-minor@example.com", "code": "123456"},
+        )
+        access = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        created = await client.post(
+            "/api/v1/skills",
+            json={"name": "skillconflictminor", "description": "desc"},
+            headers=headers,
+        )
+        skill_id = created.json()["id"]
+        first = io.BytesIO()
+        with zipfile.ZipFile(first, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("SKILL.md", "---\nname: skillconflictminor\nversion: 1.0.0\n---\nfirst")
+        first.seek(0)
+        uploaded_first = await client.post(
+            "/api/v1/skills/upload",
+            data={"skill_id": skill_id},
+            files={"file": ("skill.zip", first.read(), "application/zip")},
+            headers=headers,
+        )
+        assert uploaded_first.status_code == 201
+        assert uploaded_first.json()["version"] == "1.0.0"
+        second = io.BytesIO()
+        with zipfile.ZipFile(second, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("SKILL.md", "---\nname: skillconflictminor\nversion: 1.0.0\n---\nsecond")
+        second.seek(0)
+        uploaded_second = await client.post(
+            "/api/v1/skills/upload",
+            data={"skill_id": skill_id},
+            files={"file": ("skill.zip", second.read(), "application/zip")},
+            headers=headers,
+        )
+        assert uploaded_second.status_code == 201
+        assert uploaded_second.json()["version"] == "1.1.0"
+    finally:
+        settings.SKILL_VERSION_BUMP_STRATEGY = original_strategy
+
+
+@pytest.mark.asyncio
 async def test_skill_search_by_tag(client):
     await client.post(
         "/api/v1/auth/verification-code",

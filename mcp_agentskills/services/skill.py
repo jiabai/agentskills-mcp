@@ -577,7 +577,7 @@ class SkillService:
             version = self._validate_version(version)
             existing = await repo.get_by_version(skill.id, version)
             if existing:
-                raise ValueError("Version already exists")
+                version = await self._next_version(skill, repo)
             description = str(metadata.get("description") or frontmatter.get("description") or skill.description)
             dependencies = self._normalize_dependencies(metadata.get("dependencies") or frontmatter.get("dependencies"))
             explicit_dependency_spec = self._normalize_dependency_spec(

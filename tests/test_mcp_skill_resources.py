@@ -147,6 +147,46 @@ async def test_skill_resource_ops_return_metadata(async_session, tmp_path, monke
 
 
 @pytest.mark.asyncio
+async def test_skill_list_resource_normalizes_visible_field(async_session, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    _install_flowllm_stubs(tmp_path, monkeypatch)
+    from mcp_agentskills.db import session as db_session
+
+    monkeypatch.setattr(db_session, "get_async_session", lambda: _override_session(async_session))
+    user = User(
+        email="vis@example.com",
+        username="vis",
+        hashed_password="x",
+        enterprise_id="ent-vis",
+        team_id="team-vis",
+    )
+    async_session.add(user)
+    await async_session.commit()
+    await async_session.refresh(user)
+    skill = Skill(
+        user_id=user.id,
+        name="skillvis",
+        description="desc",
+        tags=["mcp"],
+        visibility="TEAM",
+        enterprise_id="ent-vis",
+        team_id="team-vis",
+        skill_dir=str(get_user_skill_dir(user.id, "skillvis")),
+        current_version="1.0.0",
+    )
+    async_session.add(skill)
+    await async_session.commit()
+    set_current_user_id(str(user.id))
+    from mcp_agentskills.core.tools.skill_resource_ops import SkillListResourceOp
+
+    list_op = SkillListResourceOp()
+    await list_op.async_execute()
+    list_payload = json.loads(list_op._output)
+    skills = json.loads(list_payload["contents"][0]["text"])["skills"]
+    assert skills[0]["visible"] == "team"
+
+
+@pytest.mark.asyncio
 async def test_execute_skill_runs_entrypoint(async_session, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
     _install_flowllm_stubs(tmp_path, monkeypatch)

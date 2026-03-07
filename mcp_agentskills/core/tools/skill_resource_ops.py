@@ -5,6 +5,7 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
 from mcp_agentskills.core.security.rbac import has_permission, is_skill_visible
 from mcp_agentskills.core.utils.skill_storage import get_skill_versions_dir, tool_error_payload
@@ -22,6 +23,16 @@ def _format_time(value: datetime | None) -> str | None:
     if value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
     return value.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _normalized_visibility(value: str | None) -> str:
+    normalized = str(value or "").strip().lower()
+    if normalized in {"private", "team", "enterprise"}:
+        return normalized
+    default_visibility = str(settings.DEFAULT_SKILL_VISIBILITY or "private").strip().lower()
+    if default_visibility in {"private", "team", "enterprise"}:
+        return default_visibility
+    return "private"
 
 
 @C.register_op()
@@ -79,7 +90,7 @@ class SkillListResourceOp(BaseAsyncToolOp):
                             "version": version,
                             "description": skill.description,
                             "author": str(skill.user_id),
-                            "visible": (skill.visibility or "private"),
+                            "visible": _normalized_visibility(skill.visibility),
                             "created_at": _format_time(skill.created_at),
                             "updated_at": _format_time(skill.updated_at),
                             "tags": skill.tags,
@@ -174,7 +185,7 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
                     "author": str(skill.user_id),
                     "parameters": parameters,
                     "dependencies": list(record.dependencies or []),
-                    "visible": skill.visibility or "private",
+                    "visible": _normalized_visibility(skill.visibility),
                     "created_at": _format_time(skill.created_at),
                     "updated_at": _format_time(skill.updated_at),
                     "dependency_spec": record.dependency_spec or None,

@@ -10,7 +10,7 @@
 
 - Phase 1: 基础设施搭建（配置、模型、迁移、Schemas）
 - Phase 2: 安全与认证模块（安全工具、中间件、Repo/Service）
-- Phase 3: API 接口实现（认证、用户、Token、Skill）
+- Phase 3: API 接口实现（认证、用户、Token、Skill、Dashboard、Audit）
 - Phase 4: MCP 服务集成（工具改造、HTTP/SSE）
 - Phase 5: 应用入口与部署（FastAPI 入口、部署配置）
 - Phase 6: 测试（单元与集成）
@@ -152,6 +152,18 @@
 | T3.6.2 | 创建API模块导出 | 创建 `api/__init__.py` | T3.6.1 | ✅ |
 | T3.6.3 | 创建v1模块导出 | 创建 `api/v1/__init__.py` | T3.2.4, T3.3.5, T3.4.4, T3.5.9 | ✅ |
 
+### 3.7 接口补齐（与当前实现对齐）
+
+| ID | 任务 | 描述 | 依赖 | 状态 |
+|----|------|------|------|------|
+| T3.7.1 | 实现绑定邮箱接口 | POST `/api/v1/users/bind-email` | T3.2.1, T3.1.1 | ✅ |
+| T3.7.2 | 实现身份更新接口 | PUT `/api/v1/users/{user_id}/identity`（需 `user.manage`） | T3.3.5 | ✅ |
+| T3.7.3 | 实现缓存策略接口 | GET `/api/v1/skills/cache-policy` | T3.5.9 | ✅ |
+| T3.7.4 | 实现文件内容读取接口 | GET `/api/v1/skills/{skill_id}/files/{file_path:path}` | T3.5.9 | ✅ |
+| T3.7.5 | 创建 Dashboard 路由 | 创建 `api/v1/dashboard.py` | T3.6.1 | ✅ |
+| T3.7.6 | 创建 Audit 路由 | 创建 `api/v1/audit.py` | T3.6.1 | ✅ |
+| T3.7.7 | 扩展路由汇总 | 在 `api/router.py` 注册 dashboard/audit 路由 | T3.7.5, T3.7.6 | ✅ |
+
 ---
 
 ## Phase 4: MCP 服务集成
@@ -187,6 +199,8 @@
 | T5.1.3 | 添加健康检查端点 | GET /health | T5.1.1 | ✅ |
 | T5.1.4 | 更新包版本号 | 更新 `__init__.py` 中的版本号 | T5.1.1 | ✅ |
 | T5.1.5 | 更新 README | 添加多用户模式使用说明 | T5.1.1 | ✅ |
+| T5.1.6 | 添加指标端点 | GET /metrics（资源与连接指标） | T5.1.1 | ✅ |
+| T5.1.7 | 添加网关中间件 | 请求日志与限流中间件接入 | T5.1.1 | ✅ |
 
 > **注意**: 现有 `main.py`（FlowLLM 入口）保持不变，用于 stdio/SSE 模式。
 
@@ -271,6 +285,8 @@
 | T7.5.1 | 版本自动递增策略 | SemVer 自动递增与冲突处理 | T7.3.3 | ✅ |
 
 > 注：Phase 7 的 🔵 表示“主链路已落地但仍有契约或治理缺口”，详细差异以 `project-spec.md` 第 1.5 节为准。
+>
+> 术语口径：`skill://list` 的 `visible` 示例值统一为 `enterprise | team | private`；权限点示例统一复用 `project-spec.md` 中 RBAC 模板。
 
 ---
 
@@ -280,12 +296,12 @@
 |------|--------|------|
 | Phase 1 | 18 | 基础设施搭建 |
 | Phase 2 | 18 | 安全与认证模块 |
-| Phase 3 | 26 | API 接口实现 |
+| Phase 3 | 33 | API 接口实现 |
 | Phase 4 | 8 | MCP 服务集成 |
-| Phase 5 | 9 | 应用入口与部署 |
+| Phase 5 | 11 | 应用入口与部署 |
 | Phase 6 | 13 | 测试 |
 | Phase 7 | 10 | 企业私有云 P0 |
-| **总计** | **102** | |
+| **总计** | **111** | |
 
 ---
 
@@ -313,9 +329,9 @@ Phase 3 (API)
     │       ├── T3.2.x (认证API)
     │       ├── T3.3.x (用户API)
     │       ├── T3.4.x (TokenAPI)
-    │       └── T3.5.x (Skill API，依赖 T2.4.4)
-    │               │
-    │               └── T3.6.x (路由汇总)
+    │       ├── T3.5.x (Skill API，依赖 T2.4.4)
+    │       ├── T3.6.x (路由汇总)
+    │       └── T3.7.x (Dashboard/Audit/补齐接口)
     │
 Phase 4 (MCP集成)
     │
@@ -409,3 +425,10 @@ Phase 6 (测试)
 | 已完成 | ✅ | 任务已完成 |
 | 已验证 | ✔️ | 任务已完成并通过验证 |
 | 阻塞 | 🔴 | 任务被阻塞 |
+| 已跳过 | ⏭ | 当前迭代范围外，不纳入本轮验收 |
+
+补充说明：
+
+- 本表与 `project-spec.md` 的状态标签口径保持一致；`✔️ 已验证` 作为任务维度补充状态，仅用于表示“已完成且已执行验证”
+- 任务状态仅表示执行进度，不替代 `checklist.md` 的逐项验收结果
+- 涉及可见性与权限的任务描述，字段示例统一复用 `project-spec.md` 中“术语与状态统一口径”的示例模板

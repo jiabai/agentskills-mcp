@@ -17,6 +17,15 @@
 
 部署形态与功能开关建议见 [public-vs-private-deployment-matrix.md](./public-vs-private-deployment-matrix.md)。
 
+## 术语与开关口径
+
+- 本文中的“公网版 / 私有化版”与 `project-spec.md`、`public-vs-private-deployment-matrix.md` 的定义保持一致
+- 可见性术语统一使用“企业级 / 团队级 / 个人级”，对应配置与接口字段口径 `visible`
+- 可见性示例值统一使用 `enterprise | team | private`
+- 权限术语统一使用 RBAC 权限点（`resource.action`），如 `skill.download`、`audit.read`
+- 功能开关统一使用 `ENABLE_*` 命名，部署时仅通过环境变量控制能力组合，不在代码层分叉实现
+- 示例值模板统一复用 `project-spec.md` 中“术语与状态统一口径”的 JSON/env 示例，避免跨文档漂移
+
 ## 前置条件
 
 - Python 3.10+
@@ -44,8 +53,16 @@ LOG_LEVEL=INFO
 LOG_FORMAT=json
 LOG_FILE=/var/log/agentskills/app.log
 SKILL_STORAGE_PATH=/data/skills
+SKILL_ARCHIVE_BACKEND=local
+SKILL_ARCHIVE_S3_BUCKET=
+SKILL_ARCHIVE_S3_REGION=
+SKILL_ARCHIVE_S3_ENDPOINT=
+SKILL_ARCHIVE_S3_ACCESS_KEY_ID=
+SKILL_ARCHIVE_S3_SECRET_ACCESS_KEY=
+SKILL_ARCHIVE_S3_FORCE_PATH_STYLE=true
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60
+METRICS_RETENTION_DAYS=90
 FLOW_LLM_API_KEY=your-api-key
 FLOW_LLM_BASE_URL=https://api.openai.com/v1
 POSTGRES_USER=agentskills
@@ -63,6 +80,26 @@ ALIYUN_DM_ACCOUNT_NAME=sender@your-domain.com
 ALIYUN_DM_FROM_ALIAS=AgentSkills
 ALIYUN_DM_REPLY_TO_ADDRESS=true
 ALIYUN_DM_ENDPOINT=https://dm.aliyuncs.com/
+ENABLE_PUBLIC_SIGNUP=true
+ENABLE_EMAIL_OTP_LOGIN=true
+ENABLE_SSO=false
+ENABLE_LDAP=false
+ENABLE_ORG_MODEL=false
+ENABLE_RBAC=false
+ENABLE_SKILL_VISIBILITY=false
+ENABLE_AUDIT_LOG=false
+ENABLE_AUDIT_EXPORT=false
+ENABLE_SKILL_DOWNLOAD_ENCRYPTION=true
+ENABLE_LOCAL_CACHE_ENCRYPTION=true
+ENABLE_SANDBOX_EXECUTION=false
+ENABLE_RESOURCE_QUOTA=false
+ENABLE_NETWORK_EGRESS_CONTROL=false
+ENABLE_RATE_LIMIT=true
+ENABLE_METRICS=true
+DEFAULT_SKILL_VISIBILITY=private
+DEFAULT_ROLE=member
+DEFAULT_USER_STATUS=active
+RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.download","skill.execute"],"viewer":["skill.list","skill.read","skill.download"]}
 ```
 
 ## 数据库准备

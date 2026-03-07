@@ -37,6 +37,15 @@
 | task_list.md | 完成任务后进行对应检查 |
 | deployment.md | 遇到部署与运维问题时参考 |
 
+### 术语与状态口径对齐
+
+- 本清单中的“可见性”默认指 `企业级 / 团队级 / 个人级` 三层模型，字段口径与 `project-spec.md` 保持一致（`visible`）
+- 本清单中的“权限”默认指 RBAC 权限点（`resource.action`）与可见性规则的联合判定
+- 示例值统一使用：`visible ∈ {enterprise, team, private}`
+- RBAC 示例统一使用：`admin=*`、`member=skill.list/skill.read/skill.create/skill.update/skill.delete/skill.upload/skill.download/skill.execute`、`viewer=skill.list/skill.read/skill.download`
+- `- [x]` 仅表示“该检查项通过”，对应 `project-spec.md` 的“✅ 已实现”
+- `- [ ]` 表示“未通过或待确认”，对应 `project-spec.md` 的“🔵 部分实现 / ⬜ 未实现”，需结合项内备注判定
+
 ---
 
 ## 1. 项目配置检查
@@ -56,6 +65,10 @@
   - [x] flowllm >= 0.2.0.7
   - [x] loguru >= 0.7.0
   - [x] psutil >= 5.9.0
+  - [x] cryptography >= 42.0.0
+  - [x] PyYAML >= 6.0
+  - [x] boto3 >= 1.34.0
+  - [x] ldap3 >= 2.9.1
   - [x] pipreqs
   - [x] alembic
   - [x] httpx
@@ -282,6 +295,9 @@
   - [x] 验证邮箱存在
   - [x] 验证密码正确
   - [x] 生成 JWT Token
+- [x] `issue_token()` 方法
+- [x] `login_sso()` 方法（`ENABLE_SSO=true` 时可用）
+- [x] `login_ldap()` 方法（`ENABLE_LDAP=true` 时可用）
 - [x] `refresh_token()` 方法
 
 ### 6.2 User Service
@@ -321,16 +337,26 @@
 
 ### 7.1 认证接口
 
+- [x] POST `/api/v1/auth/verification-code`
+  - [x] 支持 purpose: `login` / `register` / `bind_email`
+  - [x] 返回 `sent`、`expires_in`、`resend_interval`、`max_attempts`、`attempts_left`
+  - [x] 重发过频返回 429（`RESEND_TOO_FREQUENT`）
 - [x] POST `/api/v1/auth/register`
   - [x] 返回 201 Created
-  - [x] 返回用户信息（不含密码）
+  - [x] 返回 access_token 和 refresh_token
   - [x] 邮箱重复返回 409
 - [x] POST `/api/v1/auth/login`
   - [x] 返回 access_token 和 refresh_token
-  - [x] 错误凭据返回 401
+  - [x] 验证码错误或过期返回 401（`CODE_INVALID` / `CODE_EXPIRED`）
 - [x] POST `/api/v1/auth/refresh`
   - [x] 验证 refresh_token
   - [x] 返回新 access_token
+- [x] POST `/api/v1/auth/sso/login`
+  - [x] 开关关闭时返回 403（`ENABLE_SSO=false`）
+  - [x] 开关开启且凭据有效时返回 access_token 和 refresh_token
+- [x] POST `/api/v1/auth/ldap/login`
+  - [x] 开关关闭时返回 403（`ENABLE_LDAP=false`）
+  - [x] 开关开启且凭据有效时返回 access_token 和 refresh_token
 
 ### 7.2 用户接口
 
@@ -345,6 +371,12 @@
 - [x] PUT `/api/v1/users/me/password`
   - [x] 验证旧密码
   - [x] 更新新密码
+- [x] POST `/api/v1/users/bind-email`
+  - [x] 使用 bind_email 场景验证码校验
+  - [x] 已绑定邮箱冲突返回 409
+- [x] PUT `/api/v1/users/{user_id}/identity`
+  - [x] 需要 `user.manage` 权限
+  - [x] 支持 enterprise/team/role/status 字段更新
 
 ### 7.3 Token 接口
 
@@ -363,6 +395,8 @@
   - [x] 支持搜索
 - [x] POST `/api/v1/skills`
   - [x] 创建 Skill 目录
+- [x] GET `/api/v1/skills/cache-policy`
+  - [x] 返回缓存 TTL 与加密策略
 - [x] GET `/api/v1/skills/{skill_id}`
   - [x] 返回 Skill 详情
 - [x] PUT `/api/v1/skills/{skill_id}`
@@ -375,6 +409,29 @@
   - [x] 文件类型验证
 - [x] GET `/api/v1/skills/{skill_id}/files`
   - [x] 返回文件列表
+- [x] GET `/api/v1/skills/{skill_id}/files/{file_path:path}`
+  - [x] 返回指定文件文本内容
+
+### 7.6 Dashboard 接口
+
+- [x] GET `/api/v1/dashboard/overview`
+  - [x] 返回 active_skills / available_tokens / success_rate
+- [x] POST `/api/v1/dashboard/metrics/cleanup`
+  - [x] 仅管理员可调用
+  - [x] 支持 retention_days 并返回 removed/cutoff
+- [x] POST `/api/v1/dashboard/metrics/reset-24h`
+  - [x] 仅管理员可调用
+  - [x] 返回 24h 窗口统计清理结果
+
+### 7.7 Audit 接口
+
+- [x] GET `/api/v1/audit/logs`
+  - [x] 开关关闭返回 403（`ENABLE_AUDIT_LOG=false`）
+  - [x] 需要 `audit.read` 权限
+- [x] POST `/api/v1/audit/logs/export`
+  - [x] 开关关闭返回 403（`ENABLE_AUDIT_EXPORT=false`）
+  - [x] 需要 `audit.export` 权限
+  - [x] 支持 CSV/JSON 导出
 
 ### 7.5 MCP 接口
 
@@ -469,6 +526,8 @@
 - [x] `mcp_agentskills/api_app.py` 文件存在
 - [x] `create_application()` 工厂函数
 - [x] CORS 中间件配置
+- [x] 请求日志中间件配置
+- [x] 限流中间件配置
 - [x] 路由注册正确
 - [x] 生命周期管理（数据库初始化）
 

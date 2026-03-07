@@ -51,6 +51,44 @@
 
 文档中的命令示例使用 Bash 风格展示。Windows 环境下请使用等价的 PowerShell 命令或按目录结构手动创建。
 
+### 文档基线与适用范围
+
+- 当前仓库的实现与验收以以下文档为准：`project-spec.md`、`task_list.md`、`checklist.md`、`deployment.md`、`tools.md`、`public-vs-private-deployment-matrix.md`
+- `enterprise-skill-cloud-requirements.md` 与 `enterprise-skill-cloud-plan-p0/p1/p2/p3.md` 为蓝图或已跳过计划，不作为当前仓库落地验收依据
+- 文档冲突时采用统一优先级：代码实现与测试结果 > `project-spec.md` > `checklist.md` / `task_list.md` > 其他说明文档
+
+### 术语与状态统一口径
+
+为避免跨文档语义漂移，本文档作为术语与状态口径的统一来源：
+
+- **可见性层级**：统一使用“企业级 / 团队级 / 个人级”（英文字段对应 `enterprise/team/private`）
+- **权限判定**：统一使用“RBAC 权限点 + 可见性规则”双重约束，权限点命名采用 `resource.action`（如 `skill.download`、`audit.read`）
+- **接口契约字段**：`skill://list` 与 REST 返回中的可见性字段统一使用 `visible`
+- **状态标签**：
+  - ✅ 已实现：代码与测试覆盖完整，可进入验收通过
+  - 🔵 部分实现：主链路可用但仍有契约/覆盖缺口
+  - ⬜ 未实现：需求已明确但尚无可验收实现
+  - ⏭ 已跳过：当前迭代范围外，仅保留说明，不纳入本轮验收
+
+其他文档（`task_list.md`、`checklist.md`、`deployment.md`）中的术语与状态说明均应与本节保持一致。
+
+**统一示例模板（跨文档复用）**
+
+```json
+{
+  "skill_id": "china-stock-analysis",
+  "name": "China Stock Analysis",
+  "version": "1.2.0",
+  "visible": "enterprise",
+  "updated_at": "2026-03-06T12:00:00Z"
+}
+```
+
+```env
+DEFAULT_SKILL_VISIBILITY=private
+RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.download","skill.execute"],"viewer":["skill.list","skill.read","skill.download"]}
+```
+
 ---
 
 ## 1. 项目概述
@@ -82,9 +120,11 @@
 | ORM | SQLAlchemy 2.0 | >=2.0.0 |
 | 数据库 | PostgreSQL | >=14.0 |
 | 认证 | PyJWT + passlib | 最新版 |
-| 文件存储 | 本地文件系统 | - |
+| 文件存储 | 本地文件系统 + 可选 S3/MinIO 归档 | 本地默认，S3 需 boto3 |
 | MCP框架 | FlowLLM | >=0.2.0.7 |
 | 异步支持 | asyncio + asyncpg | 最新版 |
+| 加密能力 | cryptography | >=42.0.0 |
+| 元数据解析 | PyYAML | >=6.0 |
 
 ### 1.4 兼容性要求
 
@@ -147,6 +187,38 @@
 - 部分实现：审计采集点已覆盖核心链路，但未达到“认证/权限/技能操作全覆盖”。
 - 待增强：版本自动递增策略已实现冲突处理，但尚未配置化。
 - 未实现：MFA、WORM 审计、客户端缓存过期清理与离线降级、技能主文件对象存储化。
+
+#### 差距闭环与验收门槛
+
+| 差距项 | 当前状态 | 对应清单项 | 验收门槛 |
+|------|---------|-----------|---------|
+| `skill://list.visible` 与真实可见性对齐 | 部分完成 | checklist 17.3 第 1 项 | API 与 MCP 返回可见性一致，且含企业/团队/个人三层校验用例 |
+| 审计采集全覆盖 | 部分完成 | checklist 17.4 第 1 项 | 认证、权限、技能上传/下架/回滚/执行/下载均产生日志并可查询 |
+| 版本自动递增策略配置化 | 部分完成 | checklist 17.5 第 1 项 | 可按环境配置策略（至少 patch/minor），冲突处理可预测且有测试 |
+
+#### 维护与判定规则（统一口径）
+
+**状态标签定义**
+
+- ✅ 已实现：代码与测试均已覆盖，且 checklist 对应项可勾选通过
+- 🔵 部分实现：主链路可用，但契约一致性、治理能力或覆盖率仍有缺口
+- ⬜ 未实现：需求已明确，但当前仓库尚无可验收实现
+- ⏭ 已跳过：当前迭代范围外，仅保留方案说明，不作为本仓库验收项
+
+**判定优先级与证据来源**
+
+- 第一优先级：代码实现与可执行测试结果
+- 第二优先级：本文件（`project-spec.md`）中的约束与契约
+- 第三优先级：`checklist.md` 与 `task_list.md` 的执行记录
+- 范围外参考：`enterprise-skill-cloud-requirements.md` 与 P0-P3 计划文档（仅背景，不参与验收判定）
+
+**当前缺口优先级（建议）**
+
+| 优先级 | 事项 | 目标 | 完成判据 |
+|------|------|------|---------|
+| P0 | `skill://list.visible` 对齐 | 消除 API/MCP 可见性不一致 | 同一用户同一技能在 API 与 MCP 的可见性结果一致，覆盖企业/团队/个人三层用例 |
+| P0 | 审计采集全覆盖 | 满足合规审计完整性 | 认证、权限变更、技能上传/下架/回滚/执行/下载均产生日志并可按条件检索 |
+| P1 | 自动递增策略配置化 | 提升版本治理可控性 | 支持按环境选择策略（至少 patch/minor），并有冲突处理回归测试 |
 
 #### 交付物与验收
 
@@ -498,12 +570,12 @@ from mcp_agentskills.core.decorators.deprecation import deprecated
 router = APIRouter()
 
 @router.get("/legacy/endpoint")
-@deprecated(sunset_date="2025-06-01", alternative="/api/v1/new/endpoint")
+@deprecated(sunset_date="2027-06-01", alternative="/api/v1/new/endpoint")
 async def legacy_endpoint(response: Response):
     '''
     已弃用的端点
 
-    **弃用说明**: 该端点将于 2025-06-01 移除，请迁移到 `/api/v1/new/endpoint`
+    **弃用说明**: 该端点将于 2027-06-01 移除，请迁移到 `/api/v1/new/endpoint`
     '''
     return {"message": "This endpoint is deprecated"}
 ```
@@ -551,10 +623,24 @@ class DeprecationNotifier:
 
 | 端点 | 方法 | 认证 | 描述 |
 |------|------|------|------|
+| `/verification-code` | POST | 否 | 发送邮箱验证码（login/register/bind_email） |
 | `/register` | POST | 否 | 用户注册 |
 | `/login` | POST | 否 | 用户登录，返回JWT（邮箱验证码模式） |
 | `/refresh` | POST | 否（需 refresh_token） | 刷新Access Token（请求体提供 refresh_token） |
+| `/sso/login` | POST | 否（企业配置） | SSO 登录，开启 `ENABLE_SSO` 时可用 |
+| `/ldap/login` | POST | 否（企业配置） | LDAP 登录，开启 `ENABLE_LDAP` 时可用 |
 | `/logout` | POST | 是 | 登出（可选能力，当前仓库未实现该端点；且未实现 Token 黑名单） |
+
+#### 登录模式与开关矩阵
+
+| 登录模式 | 入口 | 必要开关 | 典型部署 |
+|------|------|---------|---------|
+| 邮箱验证码登录 | `/verification-code` + `/login` | `ENABLE_EMAIL_OTP_LOGIN=true` | 公网版默认 |
+| 公共注册 | `/verification-code` + `/register` | `ENABLE_PUBLIC_SIGNUP=true` | 公网版可选 |
+| SSO 登录 | `/sso/login` | `ENABLE_SSO=true` | 私有化版默认 |
+| LDAP 登录 | `/ldap/login` | `ENABLE_LDAP=true` | 私有化版默认 |
+
+> 设计约束：同一环境可并存多种入口，但应在部署层明确“主入口”，避免用户端出现并行身份体系导致的账户归属混乱。
 
 #### 邮箱验证码登录说明
 
@@ -586,7 +672,10 @@ class DeprecationNotifier:
 ```json
 {
   "sent": true,
-  "expires_in": 300
+  "expires_in": 300,
+  "resend_interval": 60,
+  "max_attempts": 5,
+  "attempts_left": 5
 }
 ```
 
@@ -700,6 +789,8 @@ class DeprecationNotifier:
 | `/me` | PUT | 是 | 更新用户信息 |
 | `/me` | DELETE | 是 | 删除账户（需密码确认） |
 | `/me/password` | PUT | 是 | 修改密码 |
+| `/bind-email` | POST | 是 | 绑定邮箱（验证码校验） |
+| `/{user_id}/identity` | PUT | 是（需 `user.manage`） | 管理员更新用户身份字段（enterprise/team/role/status） |
 
 ### 4.3 Token模块 `/api/v1/tokens`
 
@@ -715,12 +806,14 @@ class DeprecationNotifier:
 |------|------|------|------|
 | `/` | GET | 是 | 列出用户的Skills（分页，支持 include_inactive） |
 | `/` | POST | 是 | 创建新Skill |
+| `/cache-policy` | GET | 是 | 获取客户端缓存策略（TTL/是否加密） |
 | `/{skill_id}` | GET | 是 | 获取Skill详情 |
 | `/{skill_id}` | PUT | 是 | 更新Skill信息 |
 | `/{skill_id}` | DELETE | 是 | 删除Skill |
 | `/upload` | POST | 是 | 上传Skill文件（multipart，支持 zip 与 metadata） |
 | `/download` | POST | 是 | 下载指定版本Skill压缩包（加密传输） |
 | `/{skill_id}/files` | GET | 是 | 列出Skill文件 |
+| `/{skill_id}/files/{file_path:path}` | GET | 是 | 读取指定文件内容（文本） |
 | `/{skill_id}/deactivate` | POST | 是 | 下架Skill（写入 cache_revoked_at） |
 | `/{skill_id}/activate` | POST | 是 | 启用Skill |
 | `/{skill_id}/versions` | GET | 是 | 列出Skill版本 |
@@ -738,6 +831,43 @@ class DeprecationNotifier:
 - [x] 依赖安装指引（策略：客户端安装，返回 dependencies + pip 命令）
 - [x] 版本差异对比（added/removed/modified，小文本 unified diff）
 - [x] Skill 下载（加密传输）：`POST /api/v1/skills/download` 返回 `encrypted_code` + `checksum` + `expires_at`
+
+#### 4.4.1 依赖声明契约（多生态兼容）
+
+为兼容 Python/Node 等多生态技能依赖，同时保持向后兼容，版本元数据采用“简写 + 结构化”双轨模型：
+
+- 兼容字段：`dependencies: list[str]`（历史简写，默认按 Python/pip 解释）
+- 结构化字段：`dependency_spec: object`（推荐，支持多生态声明）
+- 版本字段：`dependency_spec.schema_version`（当前为 `1`）
+
+推荐结构示例：
+
+```json
+{
+  "schema_version": 1,
+  "python": {
+    "manager": "pip",
+    "requirements": ["requests>=2.32.0"],
+    "files": ["requirements.txt"]
+  },
+  "node": {
+    "manager": "npm",
+    "package_json": {
+      "name": "example-skill",
+      "dependencies": {
+        "lodash": "^4.17.21"
+      }
+    },
+    "lockfile": "package-lock.json"
+  }
+}
+```
+
+兼容策略：
+
+- 若仅存在 `dependencies`，服务端按 `python.manager="pip"` 语义解释
+- 若同时存在 `dependencies` 与 `dependency_spec`，以 `dependency_spec` 为准，`dependencies` 作为兼容输出
+- `install-instructions` 输出应与 `dependency_spec` 保持一致，避免“声明生态”与“安装指引”不一致
 
 ### 4.5 Dashboard模块 `/api/v1/dashboard`
 
@@ -1279,29 +1409,41 @@ async def async_execute(self):
 | **FastAPI 模式** | `api_app.py` (新增) | Web API + MCP | HTTP/SSE |
 
 ```
-agentskills-mcp/                  # 项目根目录
-├── mcp_agentskills/              # Python 包目录
+agentskills-mcp/
+├── mcp_agentskills/
 │   ├── __init__.py
-│   ├── main.py                   # FlowLLM 应用入口（保留，用于 stdio/SSE）
-│   ├── api_app.py                # FastAPI 应用入口（新增，用于 HTTP API / SSE）
+│   ├── main.py
+│   ├── api_app.py
 │   ├── config/
-│   │   ├── __init__.py
-│   │   ├── config_parser.py      # 配置解析器（保留）
-│   │   ├── default.yaml          # 默认配置（扩展）
-│   │   └── settings.py           # Pydantic Settings
+│   │   ├── config_parser.py
+│   │   ├── default.yaml
+│   │   └── settings.py
+│   ├── api/
+│   │   ├── router.py
+│   │   ├── deps.py
+│   │   ├── v1/
+│   │   │   ├── auth.py
+│   │   │   ├── users.py
+│   │   │   ├── tokens.py
+│   │   │   ├── skills.py
+│   │   │   ├── dashboard.py
+│   │   │   └── audit.py
+│   │   └── mcp/
+│   │       ├── auth.py
+│   │       ├── http_handler.py
+│   │       └── sse_handler.py
 │   ├── core/
-│   │   ├── __init__.py
-│   │   ├── security/
-│   │   │   ├── __init__.py
-│   │   │   ├── jwt_utils.py      # JWT工具
-│   │   │   ├── password.py       # 密码哈希
-│   │   │   └── token.py          # API Token生成
 │   │   ├── middleware/
-│   │   │   ├── __init__.py
-│   │   │   ├── auth.py           # 认证中间件
-│   │   │   └── rate_limit.py     # 限流中间件
-│   │   ├── tools/                # MCP工具（改造）
-│   │   │   ├── __init__.py
+│   │   │   ├── auth.py
+│   │   │   ├── logging.py
+│   │   │   └── rate_limit.py
+│   │   ├── security/
+│   │   │   ├── jwt_utils.py
+│   │   │   ├── password.py
+│   │   │   ├── token.py
+│   │   │   └── rbac.py
+│   │   ├── metrics/tool_call_metrics.py
+│   │   ├── tools/
 │   │   │   ├── load_skill_metadata_op.py
 │   │   │   ├── load_skill_op.py
 │   │   │   ├── read_reference_file_op.py
@@ -1309,50 +1451,54 @@ agentskills-mcp/                  # 项目根目录
 │   │   │   ├── execute_skill_op.py
 │   │   │   └── skill_resource_ops.py
 │   │   └── utils/
-│   │       ├── __init__.py
+│   │       ├── command_whitelist.py
 │   │       ├── service_runner.py
-│   │       ├── user_context.py    # 用户上下文管理（并发安全）
-│   │       └── skill_storage.py  # Skill存储工具
+│   │       ├── skill_archive.py
+│   │       ├── skill_storage.py
+│   │       └── user_context.py
 │   ├── models/
-│   │   ├── __init__.py
 │   │   ├── base.py
 │   │   ├── user.py
-│   │   ├── skill.py
-│   │   └── token.py
-│   ├── schemas/
-│   │   ├── __init__.py
-│   │   ├── user.py
-│   │   ├── skill.py
 │   │   ├── token.py
-│   │   └── response.py
-│   ├── repositories/
-│   │   ├── __init__.py
-│   │   ├── base.py
-│   │   ├── user.py
 │   │   ├── skill.py
-│   │   └── token.py
+│   │   ├── skill_version.py
+│   │   ├── enterprise.py
+│   │   ├── team.py
+│   │   ├── audit_log.py
+│   │   ├── request_metric.py
+│   │   ├── verification_code.py
+│   │   └── email_delivery_log.py
+│   ├── repositories/
+│   │   ├── user.py
+│   │   ├── token.py
+│   │   ├── skill.py
+│   │   ├── skill_version.py
+│   │   ├── enterprise.py
+│   │   ├── team.py
+│   │   ├── audit_log.py
+│   │   └── request_metric.py
 │   ├── services/
-│   │   ├── __init__.py
 │   │   ├── auth.py
 │   │   ├── user.py
-│   │   └── skill.py
-│   ├── api/
-│   │   ├── __init__.py
-│   │   ├── deps.py
-│   │   ├── router.py
-│   │   ├── v1/
-│   │   │   ├── __init__.py
-│   │   │   ├── auth.py
-│   │   │   ├── users.py
-│   │   │   ├── skills.py
-│   │   │   └── tokens.py
-│   │   └── mcp/
-│   │       ├── __init__.py
-│   │       ├── auth.py
-│   │       ├── http_handler.py
-│   │       └── sse_handler.py
+│   │   ├── token.py
+│   │   ├── skill.py
+│   │   ├── audit.py
+│   │   ├── verification_code.py
+│   │   └── email_sender.py
+│   ├── schemas/
+│   │   ├── auth.py
+│   │   ├── user.py
+│   │   ├── token.py
+│   │   ├── skill.py
+│   │   ├── skill_version.py
+│   │   ├── skill_lifecycle.py
+│   │   ├── skill_download.py
+│   │   ├── metrics.py
+│   │   ├── metrics_reset.py
+│   │   ├── audit.py
+│   │   ├── verification.py
+│   │   └── response.py
 │   └── db/
-│       ├── __init__.py
 │       ├── session.py
 │       └── migrations/
 ├── tests/
@@ -1391,28 +1537,46 @@ class AgentSkillsMcpApp(Application):
 #### api_app.py（新增）
 
 ```python
-# FastAPI 应用入口，用于 HTTP API 模式
-# 提供用户认证、Skill 管理、MCP 服务
-
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-from mcp_agentskills.api.mcp import McpAppProxy, ensure_mcp_initialized, get_http_app, get_sse_app
+from mcp_agentskills.api.mcp import McpAppProxy, ensure_mcp_initialized, get_http_app, get_sse_app, shutdown_mcp
 from mcp_agentskills.api.router import api_router
+from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware, configure_loguru
+from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
 from mcp_agentskills.db.session import init_db
 
 @asynccontextmanager
 async def lifespan(_application: FastAPI):
     await init_db()
     await ensure_mcp_initialized()
-    yield
+    async with AsyncExitStack() as stack:
+        for mcp_app in (get_http_app(), get_sse_app()):
+            router = getattr(mcp_app, "router", None)
+            lifespan_context = getattr(router, "lifespan_context", None) if router else None
+            if lifespan_context:
+                await stack.enter_async_context(lifespan_context(mcp_app))
+        yield
+    await shutdown_mcp()
 
 def create_application() -> FastAPI:
-    app = FastAPI(lifespan=lifespan, redirect_slashes=False)
-    app.include_router(api_router, prefix="/api/v1")
-    app.mount("/mcp", McpAppProxy(get_http_app))
-    app.mount("/sse", McpAppProxy(get_sse_app))
-    return app
+    configure_loguru()
+    application = FastAPI(lifespan=lifespan, redirect_slashes=False)
+    application.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    application.add_middleware(RequestLoggingMiddleware)
+    application.add_middleware(RateLimitMiddleware)
+    application.include_router(api_router, prefix="/api/v1")
+    application.mount("/mcp", McpAppProxy(get_http_app))
+    application.mount("/sse", McpAppProxy(get_sse_app))
+    return application
 
 app = create_application()
 ```
@@ -1460,28 +1624,36 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 | `PyJWT` | >=2.8.0 | JWT 处理 |
 | `passlib[bcrypt]` | >=1.7.4 | 密码哈希 |
 | `python-multipart` | >=0.0.6 | 文件上传 |
+| `cryptography` | >=42.0.0 | 下载加密与摘要 |
+| `PyYAML` | >=6.0 | YAML/frontmatter 解析 |
 | `flowllm` | >=0.2.0.7 | MCP 框架 |
 | `loguru` | >=0.7.0 | 日志 |
 | `httpx` | >=0.26.0 | HTTP 客户端 |
 | `psutil` | >=5.9.0 | 系统监控 |
+| `boto3` | >=1.34.0 | S3/MinIO 归档后端 |
+| `ldap3` | >=2.9.1 | LDAP/AD 登录 |
+| `pipreqs` | 最新版 | 依赖推断辅助 |
 
 ### 8.2 开发依赖
 
 | 依赖包 | 版本要求 | 用途 |
 |--------|---------|------|
 | `pytest` | >=8.0.0 | 测试框架 |
-| `pytest-asyncio` | >=0.23.0 | 异步测试支持 |
+| `pytest_asyncio` | >=1.2.0 | 异步测试支持 |
 | `pytest-cov` | >=4.1.0 | 测试覆盖率 |
 | `aiosqlite` | >=0.19.0 | SQLite 异步驱动（测试用） |
 | `ruff` | >=0.1.0 | 代码格式化 |
 | `mypy` | >=1.8.0 | 类型检查 |
+| `types-PyYAML` | 最新版 | PyYAML 类型提示 |
+| `types-passlib` | 最新版 | passlib 类型提示 |
+| `types-psutil` | 最新版 | psutil 类型提示 |
 
 ### 8.3 pyproject.toml 示例
 
 ```toml
 [project]
 name = "mcp-agentskills"
-version = "1.0.0"
+dynamic = ["version"]
 requires-python = ">=3.10"
 
 dependencies = [
@@ -1495,20 +1667,28 @@ dependencies = [
     "PyJWT>=2.8.0",
     "passlib[bcrypt]>=1.7.4",
     "python-multipart>=0.0.6",
+    "cryptography>=42.0.0",
+    "PyYAML>=6.0",
     "flowllm>=0.2.0.7",
     "loguru>=0.7.0",
     "httpx>=0.26.0",
     "psutil>=5.9.0",
+    "boto3>=1.34.0",
+    "ldap3>=2.9.1",
+    "pipreqs",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
-    "pytest-asyncio>=0.23.0",
+    "pytest-asyncio>=1.2.0",
     "pytest-cov>=4.1.0",
     "aiosqlite>=0.19.0",
     "ruff>=0.1.0",
     "mypy>=1.8.0",
+    "types-PyYAML",
+    "types-passlib",
+    "types-psutil",
 ]
 ```
 
@@ -1543,10 +1723,18 @@ LOG_FILE=/var/log/agentskills/app.log
 
 # 存储
 SKILL_STORAGE_PATH=/data/skills
+SKILL_ARCHIVE_BACKEND=local
+SKILL_ARCHIVE_S3_BUCKET=
+SKILL_ARCHIVE_S3_REGION=
+SKILL_ARCHIVE_S3_ENDPOINT=
+SKILL_ARCHIVE_S3_ACCESS_KEY_ID=
+SKILL_ARCHIVE_S3_SECRET_ACCESS_KEY=
+SKILL_ARCHIVE_S3_FORCE_PATH_STYLE=true
 
 # 限流配置
 RATE_LIMIT_REQUESTS=100
 RATE_LIMIT_WINDOW=60
+METRICS_RETENTION_DAYS=90
 
 # 邮件（DEBUG 使用 SMTP 备选，生产使用阿里云邮件推送）
 SMTP_HOST=smtp.example.com
@@ -1565,6 +1753,60 @@ ALIYUN_DM_ENDPOINT=https://dm.aliyuncs.com/
 # LLM（可选：仅在需要调用 LLM Provider 时配置）
 FLOW_LLM_API_KEY=your-api-key
 FLOW_LLM_BASE_URL=https://api.openai.com/v1
+
+# 企业能力与功能开关（公网/私有化差异化部署）
+ENABLE_PUBLIC_SIGNUP=true
+ENABLE_EMAIL_OTP_LOGIN=true
+ENABLE_SSO=false
+ENABLE_LDAP=false
+ENABLE_ORG_MODEL=false
+ENABLE_RBAC=false
+ENABLE_SKILL_VISIBILITY=false
+ENABLE_AUDIT_LOG=false
+ENABLE_AUDIT_EXPORT=false
+ENABLE_SKILL_DOWNLOAD_ENCRYPTION=true
+ENABLE_LOCAL_CACHE_ENCRYPTION=true
+ENABLE_SANDBOX_EXECUTION=false
+ENABLE_RESOURCE_QUOTA=false
+ENABLE_NETWORK_EGRESS_CONTROL=false
+ENABLE_RATE_LIMIT=true
+ENABLE_METRICS=true
+
+# 企业默认策略
+DEFAULT_SKILL_VISIBILITY=private
+DEFAULT_ROLE=member
+DEFAULT_USER_STATUS=active
+
+# RBAC 权限矩阵（JSON 字符串）
+RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.download","skill.execute"],"viewer":["skill.list","skill.read","skill.download"]}
+
+# SSO Claims 映射
+SSO_JWT_SECRET=
+SSO_JWT_ISSUER=
+SSO_JWT_AUDIENCE=
+SSO_JWT_ALGORITHM=HS256
+SSO_EMAIL_CLAIM=email
+SSO_USERNAME_CLAIM=username
+SSO_ENTERPRISE_CLAIM=enterprise_id
+SSO_TEAM_CLAIM=team_id
+SSO_ROLE_CLAIM=role
+SSO_STATUS_CLAIM=status
+
+# LDAP 映射
+LDAP_URL=
+LDAP_USER_DN_TEMPLATE=
+LDAP_SEARCH_BASE=
+LDAP_SEARCH_FILTER=(uid={username})
+LDAP_EMAIL_ATTR=mail
+LDAP_USERNAME_ATTR=uid
+LDAP_ENTERPRISE_ATTR=enterprise_id
+LDAP_TEAM_ATTR=team_id
+LDAP_ROLE_ATTR=role
+LDAP_STATUS_ATTR=status
+
+# 技能下载与缓存 TTL
+SKILL_DOWNLOAD_TTL_SECONDS=3600
+SKILL_CACHE_TTL_SECONDS=604800
 ```
 
 ### 9.2 Settings类
@@ -1690,6 +1932,15 @@ class Settings(BaseSettings):
 settings = Settings()
 ```
 
+### 9.2.1 Settings 补充说明（与当前实现对齐）
+
+上方代码片段用于说明主要校验逻辑，未完整展开全部配置项。企业私有云相关开关与映射字段以仓库实际实现为准（`mcp_agentskills/config/settings.py`），重点包括：
+
+- 公网/私有化能力开关：`ENABLE_*`
+- 权限与默认策略：`DEFAULT_SKILL_VISIBILITY`、`DEFAULT_ROLE`、`RBAC_ROLE_PERMISSIONS`
+- 身份映射：`SSO_*_CLAIM`、`LDAP_*_ATTR`
+- 下载与缓存时效：`SKILL_DOWNLOAD_TTL_SECONDS`、`SKILL_CACHE_TTL_SECONDS`
+
 ### 9.3 邮件验证码发送与运维要求
 
 #### 当前实现与可行性
@@ -1812,6 +2063,9 @@ async def init_db():
   - `.txt` - 纯文本
   - `.json` - JSON 文件
   - `.yaml`, `.yml` - YAML 配置文件
+- **ZIP 包策略**:
+  - `/api/v1/skills/upload` 在入口层单独识别 `.zip`
+  - ZIP 解包后仍按白名单校验每个文件，且执行路径安全校验
 - **大小限制**:
   - 单文件大小: 10MB
   - 总上传大小: 100MB
@@ -2174,6 +2428,7 @@ alembic downgrade -1
 
 - 提供 `/health` 端点
 - 检查数据库连接状态
+- 提供 `/metrics` 端点（资源与连接指标）
 
 ---
 

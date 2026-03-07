@@ -56,6 +56,7 @@
 - 当前仓库的实现与验收以以下文档为准：`project-spec.md`、`task_list.md`、`checklist.md`、`deployment.md`、`tools.md`、`public-vs-private-deployment-matrix.md`
 - `enterprise-skill-cloud-requirements.md` 与 `enterprise-skill-cloud-plan-p0/p1/p2/p3.md` 为蓝图或已跳过计划，不作为当前仓库落地验收依据
 - 文档冲突时采用统一优先级：代码实现与测试结果 > `project-spec.md` > `checklist.md` / `task_list.md` > 其他说明文档
+- `checklist.md` 勾选建议遵循“证据优先”：将 `- [ ]` 改为 `- [x]` 时记录日期、验证命令与结果摘要；无证据保持 `- [ ]` 并标注“（需确认）”
 
 ### 术语与状态统一口径
 

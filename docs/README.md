@@ -10,6 +10,8 @@
 - 工具说明（MCP Tools）：[tools.md](./tools.md)
 - 公网版 vs 私有化版配置矩阵：[public-vs-private-deployment-matrix.md](./public-vs-private-deployment-matrix.md)
 
+> 说明：`checklist.md` 已新增“勾选证据规范”。每次将 `- [ ]` 改为 `- [x]` 时，建议同步记录日期、验证命令与结果摘要；缺少验证证据时保持 `- [ ]` 并标注“（需确认）”。
+
 重构历史与注意事项已并入 project-spec.md、task_list.md、deployment.md、checklist.md。
 
 ## 企业私有云需求草案

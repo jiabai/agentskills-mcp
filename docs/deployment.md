@@ -37,6 +37,8 @@
 
 复制 `.env.example` 并按需修改：
 
+> 说明：`.env.example` 展示的是代码内建默认值与示例值；私有化部署需显式覆盖相关能力开关。
+
 ```bash
 DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/agentskills
 DATABASE_POOL_SIZE=20
@@ -123,6 +125,20 @@ LDAP_ENTERPRISE_ATTR=enterprise_id
 LDAP_TEAM_ATTR=team_id
 LDAP_ROLE_ATTR=role
 LDAP_STATUS_ATTR=status
+```
+
+### 私有化版最小能力开关示例
+
+```bash
+ENABLE_PUBLIC_SIGNUP=false
+ENABLE_EMAIL_OTP_LOGIN=false
+ENABLE_SSO=true
+ENABLE_LDAP=true
+ENABLE_ORG_MODEL=true
+ENABLE_RBAC=true
+ENABLE_SKILL_VISIBILITY=true
+ENABLE_AUDIT_LOG=true
+ENABLE_AUDIT_EXPORT=true
 ```
 
 ## 数据库准备

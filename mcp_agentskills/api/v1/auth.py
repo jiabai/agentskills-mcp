@@ -1,4 +1,4 @@
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.security.jwt_utils import decode_token
@@ -34,6 +34,7 @@ def _verification_error_payload(detail: str) -> dict | None:
 
 @router.post("/verification-code", response_model=VerificationCodeResponse)
 async def send_verification_code(
+    request: Request,
     payload: VerificationCodeRequest,
     background_tasks: BackgroundTasks,
     session=Depends(get_async_session),
@@ -54,6 +55,16 @@ async def send_verification_code(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=_verification_error_payload(detail) or detail,
         ) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id="anonymous",
+            action="auth.verification_code.send",
+            target=payload.email,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+            metadata={"purpose": payload.purpose},
+        )
     return response
 
 
@@ -98,6 +109,15 @@ async def login(payload: UserLoginCode, session=Depends(get_async_session)):
             raise ValueError("Invalid credentials")
     except ValueError as exc:
         detail = str(exc)
+        if settings.ENABLE_AUDIT_LOG:
+            audit_service = AuditService(AuditLogRepository(session))
+            await audit_service.create_event(
+                actor_id="anonymous",
+                action="auth.login.failed",
+                target=payload.email,
+                result="failed",
+                metadata={"detail": detail},
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=_verification_error_payload(detail) or detail,
@@ -112,16 +132,29 @@ async def login(payload: UserLoginCode, session=Depends(get_async_session)):
 @router.post("/refresh", response_model=AccessTokenResponse)
 async def refresh(payload: TokenRefresh, session=Depends(get_async_session)):
     service = AuthService(UserRepository(session))
+    target = "unknown"
+    try:
+        target = str(decode_token(payload.refresh_token).get("sub") or "") or "unknown"
+    except Exception:
+        target = "unknown"
     try:
         token_pair = await service.refresh_token(payload.refresh_token)
     except ValueError as exc:
+        if settings.ENABLE_AUDIT_LOG:
+            audit_service = AuditService(AuditLogRepository(session))
+            await audit_service.create_event(
+                actor_id=target,
+                action="auth.refresh.failed",
+                target=target,
+                result="failed",
+                metadata={"detail": str(exc)},
+            )
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
     if settings.ENABLE_AUDIT_LOG:
-        user_id = str(decode_token(payload.refresh_token).get("sub") or "")
-        if not user_id:
+        if target == "unknown":
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
         audit_service = AuditService(AuditLogRepository(session))
-        await audit_service.create_event(actor_id=user_id, action="auth.refresh", target=user_id)
+        await audit_service.create_event(actor_id=target, action="auth.refresh", target=target)
     return AccessTokenResponse(access_token=token_pair.access_token)
 
 

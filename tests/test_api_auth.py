@@ -1,8 +1,10 @@
 import httpx
 import pytest
+from sqlalchemy import select
 
 from mcp_agentskills.api_app import create_application
 from mcp_agentskills.config.settings import settings
+from mcp_agentskills.models.audit_log import AuditLog
 
 
 @pytest.mark.asyncio
@@ -66,7 +68,23 @@ async def test_verification_code_response_contains_limits(client):
 
 
 @pytest.mark.asyncio
-async def test_login_invalid_credentials_format(client):
+async def test_verification_code_creates_audit_log(client, async_session):
+    response = await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "audit-code@example.com", "purpose": "login"},
+    )
+    assert response.status_code == 200
+    query = select(AuditLog).where(
+        AuditLog.action == "auth.verification_code.send",
+        AuditLog.target == "audit-code@example.com",
+    )
+    result = await async_session.execute(query)
+    event = result.scalar_one_or_none()
+    assert event is not None
+
+
+@pytest.mark.asyncio
+async def test_login_invalid_credentials_format(client, async_session):
     await client.post(
         "/api/v1/auth/verification-code",
         json={"email": "bad@example.com", "purpose": "register"},
@@ -89,6 +107,26 @@ async def test_login_invalid_credentials_format(client):
     assert payload["code"] == "CODE_INVALID"
     assert "timestamp" in payload
     assert payload["timestamp"].endswith("Z")
+    query = select(AuditLog).where(
+        AuditLog.action == "auth.login.failed",
+        AuditLog.target == "bad@example.com",
+    )
+    result = await async_session.execute(query)
+    event = result.scalar_one_or_none()
+    assert event is not None
+
+
+@pytest.mark.asyncio
+async def test_refresh_invalid_token_creates_audit_log(client, async_session):
+    response = await client.post("/api/v1/auth/refresh", json={"refresh_token": "invalid.token.value"})
+    assert response.status_code == 401
+    query = select(AuditLog).where(
+        AuditLog.action == "auth.refresh.failed",
+        AuditLog.target == "unknown",
+    )
+    result = await async_session.execute(query)
+    event = result.scalar_one_or_none()
+    assert event is not None
 
 
 @pytest.mark.asyncio

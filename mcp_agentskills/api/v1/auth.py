@@ -1,13 +1,16 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 
 from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.security.jwt_utils import decode_token
 from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
 from mcp_agentskills.repositories.user import UserRepository
 from mcp_agentskills.schemas.auth import LDAPLoginRequest, SSOLoginRequest
 from mcp_agentskills.schemas.response import AccessTokenResponse, TokenPair
 from mcp_agentskills.schemas.token import TokenRefresh
 from mcp_agentskills.schemas.user import UserLoginCode, UserRegisterCode
 from mcp_agentskills.schemas.verification import VerificationCodeRequest, VerificationCodeResponse
+from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.auth import AuthService
 from mcp_agentskills.services.verification_code import get_verification_service
 
@@ -76,6 +79,9 @@ async def register(payload: UserRegisterCode, session=Depends(get_async_session)
             detail=_verification_error_payload(detail) or detail,
         ) from exc
     token_pair = service.issue_token(user)
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(actor_id=user.id, action="auth.register", target=user.id)
     return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)
 
 
@@ -97,6 +103,9 @@ async def login(payload: UserLoginCode, session=Depends(get_async_session)):
             detail=_verification_error_payload(detail) or detail,
         ) from exc
     token_pair = service.issue_token(user)
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(actor_id=user.id, action="auth.login", target=user.id)
     return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)
 
 
@@ -107,6 +116,12 @@ async def refresh(payload: TokenRefresh, session=Depends(get_async_session)):
         token_pair = await service.refresh_token(payload.refresh_token)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        user_id = str(decode_token(payload.refresh_token).get("sub") or "")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(actor_id=user_id, action="auth.refresh", target=user_id)
     return AccessTokenResponse(access_token=token_pair.access_token)
 
 
@@ -119,6 +134,12 @@ async def sso_login(payload: SSOLoginRequest, session=Depends(get_async_session)
         token_pair = await service.login_sso(payload.id_token)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        user_id = str(decode_token(token_pair.access_token).get("sub") or "")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(actor_id=user_id, action="auth.sso.login", target=user_id)
     return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)
 
 
@@ -131,4 +152,10 @@ async def ldap_login(payload: LDAPLoginRequest, session=Depends(get_async_sessio
         token_pair = await service.login_ldap(payload.username, payload.password)
     except Exception as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        user_id = str(decode_token(token_pair.access_token).get("sub") or "")
+        if not user_id:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(actor_id=user_id, action="auth.ldap.login", target=user_id)
     return TokenPair(access_token=token_pair.access_token, refresh_token=token_pair.refresh_token)

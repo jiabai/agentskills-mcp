@@ -93,6 +93,16 @@ def test_timeout_settings_maximum():
         )
 
 
+def test_skill_version_bump_strategy_invalid():
+    with pytest.raises(ValidationError):
+        Settings(
+            **{
+                **base_settings_kwargs(),
+                "SKILL_VERSION_BUMP_STRATEGY": "major",
+            },
+        )
+
+
 def test_alembic_files_exist():
     root = Path(__file__).resolve().parents[1]
     assert (root / "alembic.ini").exists()

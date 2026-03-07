@@ -79,7 +79,7 @@ class SkillListResourceOp(BaseAsyncToolOp):
                             "version": version,
                             "description": skill.description,
                             "author": str(skill.user_id),
-                            "visible": "private",
+                            "visible": (skill.visibility or "private"),
                             "created_at": _format_time(skill.created_at),
                             "updated_at": _format_time(skill.updated_at),
                             "tags": skill.tags,

@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     SKILL_ARCHIVE_S3_FORCE_PATH_STYLE: bool = True
     SKILL_DOWNLOAD_TTL_SECONDS: int = 3600
     SKILL_CACHE_TTL_SECONDS: int = 604800
+    SKILL_VERSION_BUMP_STRATEGY: str = "patch"
 
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW: int = 60
@@ -169,6 +170,14 @@ class Settings(BaseSettings):
         if v > 3650:
             raise ValueError("METRICS_RETENTION_DAYS 不能超过 3650 天")
         return v
+
+    @field_validator("SKILL_VERSION_BUMP_STRATEGY")
+    @classmethod
+    def validate_skill_version_bump_strategy(cls, v):
+        value = str(v).strip().lower()
+        if value not in {"patch", "minor"}:
+            raise ValueError("SKILL_VERSION_BUMP_STRATEGY 仅支持 patch 或 minor")
+        return value
 
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
 

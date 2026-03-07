@@ -306,6 +306,16 @@ class SkillService:
         if not semvers:
             return "1.0.0"
         prefix, major, minor, patch = max(semvers, key=lambda item: (item[1], item[2], item[3]))
+        strategy = (settings.SKILL_VERSION_BUMP_STRATEGY or "patch").strip().lower()
+        if strategy == "minor":
+            next_major = major
+            next_minor = minor + 1
+            next_patch = 0
+            next_version = f"{prefix}{next_major}.{next_minor}.{next_patch}"
+            while await repo.get_by_version(skill.id, next_version):
+                next_minor += 1
+                next_version = f"{prefix}{next_major}.{next_minor}.{next_patch}"
+            return next_version
         next_patch = patch + 1
         next_version = f"{prefix}{major}.{minor}.{next_patch}"
         while await repo.get_by_version(skill.id, next_version):

@@ -3,6 +3,8 @@ import zipfile
 
 import pytest
 
+from mcp_agentskills.config.settings import settings
+
 
 @pytest.mark.asyncio
 async def test_skill_lifecycle(client, tmp_path, monkeypatch):
@@ -523,6 +525,64 @@ async def test_skill_version_auto_increment(client, tmp_path, monkeypatch):
     items = versions.json()["items"]
     assert items[0]["version"] == "1.0.1"
     assert items[1]["version"] == "1.0.0"
+
+
+@pytest.mark.asyncio
+async def test_skill_version_auto_increment_with_minor_strategy(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    original_strategy = settings.SKILL_VERSION_BUMP_STRATEGY
+    settings.SKILL_VERSION_BUMP_STRATEGY = "minor"
+    try:
+        await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "auto-minor@example.com", "purpose": "register"},
+        )
+        await client.post(
+            "/api/v1/auth/register",
+            json={"email": "auto-minor@example.com", "username": "auto-minor", "code": "123456"},
+        )
+        await client.post(
+            "/api/v1/auth/verification-code",
+            json={"email": "auto-minor@example.com", "purpose": "login"},
+        )
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "auto-minor@example.com", "code": "123456"},
+        )
+        access = login.json()["access_token"]
+        headers = {"Authorization": f"Bearer {access}"}
+        created = await client.post(
+            "/api/v1/skills",
+            json={"name": "skillautominor", "description": "desc"},
+            headers=headers,
+        )
+        skill_id = created.json()["id"]
+        first = io.BytesIO()
+        with zipfile.ZipFile(first, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("SKILL.md", "---\nname: skillautominor\ndescription: auto\n---\nfirst")
+        first.seek(0)
+        uploaded_first = await client.post(
+            "/api/v1/skills/upload",
+            data={"skill_id": skill_id},
+            files={"file": ("skill.zip", first.read(), "application/zip")},
+            headers=headers,
+        )
+        assert uploaded_first.status_code == 201
+        assert uploaded_first.json()["version"] == "1.0.0"
+        second = io.BytesIO()
+        with zipfile.ZipFile(second, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("SKILL.md", "---\nname: skillautominor\ndescription: auto\n---\nsecond")
+        second.seek(0)
+        uploaded_second = await client.post(
+            "/api/v1/skills/upload",
+            data={"skill_id": skill_id},
+            files={"file": ("skill.zip", second.read(), "application/zip")},
+            headers=headers,
+        )
+        assert uploaded_second.status_code == 201
+        assert uploaded_second.json()["version"] == "1.1.0"
+    finally:
+        settings.SKILL_VERSION_BUMP_STRATEGY = original_strategy
 
 
 @pytest.mark.asyncio

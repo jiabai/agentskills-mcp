@@ -7,15 +7,18 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
 from mcp_agentskills.core.security.rbac import has_permission, is_skill_visible
 from mcp_agentskills.core.utils.command_whitelist import validate_command
 from mcp_agentskills.core.utils.skill_storage import get_skill_versions_dir, tool_error_payload
 from mcp_agentskills.core.utils.user_context import get_current_user_id
 from mcp_agentskills.db import session as db_session
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
 from mcp_agentskills.repositories.skill import SkillRepository
 from mcp_agentskills.repositories.skill_version import SkillVersionRepository
 from mcp_agentskills.repositories.user import UserRepository
+from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.skill import SkillService
 
 
@@ -124,6 +127,15 @@ class ExecuteSkillOp(BaseAsyncToolOp):
                 duration_ms = int((perf_counter() - start) * 1000)
                 output = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
                 status = "success" if proc.returncode == 0 else "error"
+                if settings.ENABLE_AUDIT_LOG:
+                    audit_service = AuditService(AuditLogRepository(session))
+                    await audit_service.create_event(
+                        actor_id=user.id,
+                        action="skill.execute",
+                        target=skill.id,
+                        result=status,
+                        metadata={"version": version, "execution_time_ms": duration_ms},
+                    )
                 self._set_output(
                     json.dumps(
                         {"result": {"status": status, "output": output, "execution_time_ms": duration_ms}},

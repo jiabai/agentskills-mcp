@@ -5,10 +5,12 @@ from types import ModuleType
 from typing import Any
 
 import pytest
+from sqlalchemy import select
 
 from mcp_agentskills.core.security.jwt_utils import create_access_token
 from mcp_agentskills.core.utils.user_context import set_current_user_id
 from mcp_agentskills.core.utils.skill_storage import get_skill_versions_dir, get_user_skill_dir
+from mcp_agentskills.models.audit_log import AuditLog
 from mcp_agentskills.models.skill import Skill
 from mcp_agentskills.models.skill_version import SkillVersion
 from mcp_agentskills.models.user import User
@@ -71,7 +73,13 @@ async def test_skill_resource_ops_return_metadata(async_session, tmp_path, monke
     from mcp_agentskills.db import session as db_session
 
     monkeypatch.setattr(db_session, "get_async_session", lambda: _override_session(async_session))
-    user = User(email="res@example.com", username="res", hashed_password="x")
+    user = User(
+        email="res@example.com",
+        username="res",
+        hashed_password="x",
+        enterprise_id="ent-res",
+        team_id="team-res",
+    )
     async_session.add(user)
     await async_session.commit()
     await async_session.refresh(user)
@@ -80,6 +88,9 @@ async def test_skill_resource_ops_return_metadata(async_session, tmp_path, monke
         name="skillres",
         description="desc",
         tags=["mcp"],
+        visibility="team",
+        enterprise_id="ent-res",
+        team_id="team-res",
         skill_dir=str(get_user_skill_dir(user.id, "skillres")),
         current_version="1.0.0",
     )
@@ -124,6 +135,7 @@ async def test_skill_resource_ops_return_metadata(async_session, tmp_path, monke
     skills = json.loads(list_payload["contents"][0]["text"])["skills"]
     assert skills[0]["skill_id"] == skill.id
     assert skills[0]["version"] == "1.0.0"
+    assert skills[0]["visible"] == "team"
     detail_op = SkillDetailResourceOp()
     detail_op.input_dict = {"skill_id": skill.id, "version": "1.0.0"}
     await detail_op.async_execute()
@@ -184,6 +196,14 @@ async def test_execute_skill_runs_entrypoint(async_session, tmp_path, monkeypatc
     payload = json.loads(op._output)
     assert payload["result"]["status"] == "success"
     assert '"foo": "bar"' in payload["result"]["output"]
+    result = await async_session.execute(
+        select(AuditLog).where(
+            AuditLog.actor_id == user.id,
+            AuditLog.action == "skill.execute",
+            AuditLog.target == skill.id,
+        )
+    )
+    assert result.scalar_one_or_none() is not None
 
 
 @pytest.mark.asyncio

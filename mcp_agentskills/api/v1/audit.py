@@ -87,4 +87,11 @@ async def export_audit_logs(
     else:
         content = service.export_json(normalized)
         fmt = "json"
+    if settings.ENABLE_AUDIT_LOG:
+        await service.create_event(
+            actor_id=current_user.id,
+            action="audit.export",
+            target="audit.logs",
+            metadata={"format": fmt, "count": len(normalized)},
+        )
     return AuditLogExportResponse(format=fmt, content=content)

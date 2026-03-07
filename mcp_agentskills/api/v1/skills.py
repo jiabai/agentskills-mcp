@@ -153,6 +153,7 @@ async def delete_skill(
 
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_skill_file(
+    request: Request,
     skill_id: str = Form(...),
     file: UploadFile = File(...),
     metadata: str | None = Form(None),
@@ -167,10 +168,30 @@ async def upload_skill_file(
         filename = file.filename or ""
         if filename.lower().endswith(".zip"):
             payload = await service.upload_zip(current_user, skill_id, filename, content, metadata)
+            if settings.ENABLE_AUDIT_LOG:
+                audit_service = AuditService(AuditLogRepository(session))
+                await audit_service.create_event(
+                    actor_id=current_user.id,
+                    action="skill.upload",
+                    target=skill_id,
+                    ip=request.client.host if request and request.client else "",
+                    user_agent=request.headers.get("user-agent", ""),
+                    metadata={"filename": filename, "archive": True, "version": payload.get("version")},
+                )
             return payload
         filename = await service.upload_file(current_user, skill_id, filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.upload",
+            target=skill_id,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+            metadata={"filename": filename, "archive": False},
+        )
     return {"filename": filename}
 
 
@@ -203,6 +224,7 @@ async def download_skill(
 
 @router.post("/{skill_id}/deactivate", response_model=SkillResponse)
 async def deactivate_skill(
+    request: Request,
     skill_id: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -212,11 +234,21 @@ async def deactivate_skill(
         skill = await service.deactivate_skill(current_user, skill_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.deactivate",
+            target=skill_id,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
     return skill
 
 
 @router.post("/{skill_id}/activate", response_model=SkillResponse)
 async def activate_skill(
+    request: Request,
     skill_id: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -226,6 +258,15 @@ async def activate_skill(
         skill = await service.activate_skill(current_user, skill_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.activate",
+            target=skill_id,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
     return skill
 
 
@@ -286,6 +327,7 @@ async def diff_skill_versions(
 
 @router.post("/{skill_id}/versions/{version}/rollback", response_model=SkillVersionResponse)
 async def rollback_skill_version(
+    request: Request,
     skill_id: str,
     version: str,
     current_user=Depends(get_current_active_user),
@@ -296,6 +338,16 @@ async def rollback_skill_version(
         record = await service.rollback_version(current_user, skill_id, version)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.rollback",
+            target=skill_id,
+            ip=request.client.host if request and request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+            metadata={"version": version},
+        )
     return SkillVersionResponse.model_validate(record)
 
 

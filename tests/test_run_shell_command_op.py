@@ -14,6 +14,27 @@ def test_command_whitelist_blocks_windows_traversal():
     assert "blocked pattern" in message.lower()
 
 
+def test_command_whitelist_blocks_network_egress_when_enabled(monkeypatch):
+    from mcp_agentskills.config import settings as settings_module
+
+    monkeypatch.setattr(settings_module.settings, "ENABLE_NETWORK_EGRESS_CONTROL", True, raising=False)
+    allowed, message = validate_command(
+        'python -c "import urllib.request; urllib.request.urlopen(\'https://example.com\')"'
+    )
+    assert allowed is False
+    assert "network egress" in message.lower()
+
+
+def test_command_whitelist_allows_network_related_text_when_disabled(monkeypatch):
+    from mcp_agentskills.config import settings as settings_module
+
+    monkeypatch.setattr(settings_module.settings, "ENABLE_NETWORK_EGRESS_CONTROL", False, raising=False)
+    allowed, _ = validate_command(
+        'python -c "import urllib.request; urllib.request.urlopen(\'https://example.com\')"'
+    )
+    assert allowed is True
+
+
 async def main(skill_dir: str, skill_name: str, command: str):
     """Execute the run_shell_command operation given a skill directory, a skill name, and a command."""
     async with AgentSkillsMcpApp(

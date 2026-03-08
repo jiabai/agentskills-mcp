@@ -37,6 +37,7 @@
 | ENABLE_AUDIT_EXPORT | 是否允许审计导出 | false | true | 审计/合规 |
 | ENABLE_SKILL_DOWNLOAD_ENCRYPTION | 技能下载加密传输 | 可选 | true | 技能/安全 |
 | ENABLE_LOCAL_CACHE_ENCRYPTION | 客户端缓存加密 | 可选 | true | 缓存/安全 |
+| ENABLE_CACHE_OFFLINE_FALLBACK | 远端不可用时启用本地缓存回退 | 可选 | true | 缓存/可用性 |
 | ENABLE_SANDBOX_EXECUTION | 技能执行沙箱 | 可选 | true | 运行隔离 |
 | ENABLE_RESOURCE_QUOTA | CPU/内存/磁盘配额 | 可选 | true | 运行隔离 |
 | ENABLE_NETWORK_EGRESS_CONTROL | 外网访问控制 | 可选 | true | 运行隔离 |

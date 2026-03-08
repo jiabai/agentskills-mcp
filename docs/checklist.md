@@ -109,7 +109,7 @@
 
 - [x] `python -m ruff check .` 通过（无历史告警残留）
 - [x] `python -m mypy mcp_agentskills` 通过（类型检查无错误）
-- [ ] CI 已纳入后端 `ruff` 与 `mypy` 强制门禁（当前仅本地验收执行）
+- [x] CI 已纳入后端 `ruff` 与 `mypy` 强制门禁（见 `.github/workflows/ci.yml`）
 
 ---
 
@@ -643,7 +643,7 @@
 ### 14.4 API 安全
 
 - [x] 所有用户 API 需要 JWT 认证
-- [x] MCP API 需要 API Token 认证
+- [x] MCP API 需要 Bearer 认证（优先 API Token，兼容 JWT Access Token）
 - [x] 敏感操作需要密码确认
 - [x] CORS 配置正确
 
@@ -800,7 +800,7 @@ python scripts/checklist_stats.py
 
 ### 17.3 MCP/REST 契约
 
-- [ ] `skill://list` 返回可见技能列表（`visible` 字段仍需与真实可见性完全对齐）
+- [x] `skill://list` 返回可见技能列表（`visible` 字段与真实可见性对齐并有测试覆盖）
 - [x] `skill://{id}@{version}` 返回元数据与依赖
 - [x] `execute_skill` 权限校验与执行可用
 - [x] `skills/download` 加密下载与鉴权可用
@@ -815,6 +815,10 @@ python scripts/checklist_stats.py
 
 - [x] 版本自动递增策略可配置
 - [x] 版本冲突自动处理并返回最终版本
+
+### 17.6 缓存离线降级
+
+- [x] `ENABLE_CACHE_OFFLINE_FALLBACK` 开关已纳入文档与部署矩阵，私有化默认建议启用
 
 ---
 

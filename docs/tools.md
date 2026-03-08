@@ -21,7 +21,7 @@
 |------|-----------|-----------|
 | Skill路径 | `{skill_dir}/{skill_name}/` | `{skill_dir}/{user_id}/{skill_name}/` |
 | 用户隔离 | 无 | 每个用户独立的Skill空间 |
-| 认证方式 | 无 | Web API 使用 JWT；MCP 使用 API Token（`ask_live_...`） |
+| 认证方式 | 无 | Web API 使用 JWT；MCP 使用 Bearer（优先 API Token `ask_live_...`，兼容 JWT Access Token） |
 | 向后兼容 | - | 支持（无user_id时使用全局路径） |
 
 ---
@@ -349,7 +349,7 @@ python tests/test_run_shell_command_op.py <path/to/skills> <skill_name> <command
 
 ### Returns
 
-`str`：JSON 字符串，包含 `status`、`output`、`execution_time_ms`。
+`str`：JSON 字符串，格式为 `{"result":{"status":"...","output":"...","execution_time_ms":123}}`。
 
 ---
 

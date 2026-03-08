@@ -11,6 +11,7 @@ import asyncio
 import os
 import shutil
 from pathlib import Path
+from typing import Any
 
 from loguru import logger
 
@@ -18,10 +19,41 @@ from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
 from flowllm.core.schema import ToolCall
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.metrics.tool_call_metrics import record_tool_call
 from mcp_agentskills.core.utils.command_whitelist import validate_command
 from mcp_agentskills.core.utils.skill_storage import tool_error_payload, validate_skill_name
 from mcp_agentskills.core.utils.user_context import get_current_user_id
+
+_execution_control: Any = None
+_execution_control_mod: Any = None
+try:
+    from mcp_agentskills.core.utils import execution_control as _execution_control_mod
+except Exception:
+    pass
+if _execution_control_mod is not None:
+    _execution_control = _execution_control_mod
+
+
+async def acquire_execution_slot(user_id: str, team_id: str | None):
+    if _execution_control is None:
+        async def _release():
+            return None
+
+        return _release
+    return await _execution_control.acquire_execution_slot(user_id, team_id)
+
+
+def is_within_workdir_quota(path: Path, max_bytes: int | None = None) -> bool:
+    if _execution_control is None:
+        return True
+    return _execution_control.is_within_workdir_quota(path, max_bytes=max_bytes)
+
+
+def truncate_output(output: str, max_bytes: int | None = None) -> str:
+    if _execution_control is None:
+        return output
+    return _execution_control.truncate_output(output, max_bytes=max_bytes)
 
 
 async def _is_skill_active(skill_name: str, user_id: str | None) -> bool:
@@ -163,6 +195,7 @@ class RunShellCommandOp(BaseAsyncToolOp):
             - Environment variables from the current process are passed to the subprocess
         """
         exception: Exception | None = None
+        release_slot = None
         try:
             skill_name = self.input_dict["skill_name"]
             command: str = self.input_dict["command"]
@@ -187,6 +220,14 @@ class RunShellCommandOp(BaseAsyncToolOp):
                     ),
                 )
                 return
+            if settings.ENABLE_RESOURCE_QUOTA and not is_within_workdir_quota(work_dir):
+                self.set_output(tool_error_payload("Work directory quota exceeded", "QUOTA_EXCEEDED"))
+                return
+            if settings.ENABLE_RESOURCE_QUOTA:
+                release_slot = await acquire_execution_slot(user_id or "anonymous", None)
+                if release_slot is None:
+                    self.set_output(tool_error_payload("Execution concurrency limit exceeded", "CONCURRENCY_LIMIT"))
+                    return
 
             is_valid, error_msg = validate_command(command)
             if not is_valid:
@@ -215,17 +256,25 @@ class RunShellCommandOp(BaseAsyncToolOp):
                 f"cd {work_dir} && {command}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
-                env=os.environ.copy(),
+                env={"PATH": os.environ.get("PATH", "")} if settings.ENABLE_SANDBOX_EXECUTION else os.environ.copy(),
             )
 
-            stdout, stderr = await proc.communicate()
-            output = stdout.decode().strip() + "\n" + stderr.decode().strip()
+            timeout_seconds = max(1, int(settings.SKILL_EXECUTION_TIMEOUT_SECONDS))
+            try:
+                stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+            except asyncio.TimeoutError:
+                proc.kill()
+                stdout, stderr = await proc.communicate()
+            output = truncate_output(stdout.decode().strip() + "\n" + stderr.decode().strip())
             logger.info(f"✅ Command executed: skill_name={skill_name} output={output}")
             self.set_output(output)
+            self._output = output
         except Exception as exc:
             exception = exc
             raise
         finally:
+            if release_slot is not None:
+                await release_slot()
             await record_tool_call(
                 "run_shell_command",
                 output=getattr(self, "_output", None),

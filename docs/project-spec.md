@@ -184,7 +184,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 
 #### 当前实现边界（截至 2026-03）
 
-- 已知偏差：`skill_list_resource` 的 `visible` 字段尚未完全反映真实可见性。
+- 已实现：`skill_list_resource` 的 `visible` 字段已与真实可见性对齐，并有测试覆盖。
 - 部分实现：审计采集点已覆盖核心链路，但未达到“认证/权限/技能操作全覆盖”。
 - 已实现：版本自动递增策略支持 `patch/minor` 配置并包含冲突处理。
 - 未实现：MFA、WORM 审计、客户端缓存过期清理与离线降级、技能主文件对象存储化。
@@ -193,7 +193,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 
 | 差距项 | 当前状态 | 对应清单项 | 验收门槛 |
 |------|---------|-----------|---------|
-| `skill://list.visible` 与真实可见性对齐 | 部分完成 | checklist 17.3 第 1 项 | API 与 MCP 返回可见性一致，且含企业/团队/个人三层校验用例 |
+| `skill://list.visible` 与真实可见性对齐 | 已完成 | checklist 17.3 第 1 项 | API 与 MCP 返回可见性一致，且含企业/团队/个人三层校验用例 |
 | 审计采集全覆盖 | 部分完成 | checklist 17.4 第 1 项 | 认证、权限、技能上传/下架/回滚/执行/下载均产生日志并可查询 |
 | 版本自动递增策略配置化 | 已完成 | checklist 17.5 第 1 项 | 可按环境配置策略（至少 patch/minor），冲突处理可预测且有测试 |
 
@@ -1731,6 +1731,11 @@ SKILL_ARCHIVE_S3_ENDPOINT=
 SKILL_ARCHIVE_S3_ACCESS_KEY_ID=
 SKILL_ARCHIVE_S3_SECRET_ACCESS_KEY=
 SKILL_ARCHIVE_S3_FORCE_PATH_STYLE=true
+SKILL_EXECUTION_TIMEOUT_SECONDS=300
+SKILL_MAX_CONCURRENT_EXECUTIONS_PER_USER=4
+SKILL_MAX_CONCURRENT_EXECUTIONS_PER_TEAM=16
+SKILL_MAX_WORKDIR_BYTES=1073741824
+SKILL_MAX_OUTPUT_BYTES=1048576
 
 # 限流配置
 RATE_LIMIT_REQUESTS=100
@@ -1767,6 +1772,7 @@ ENABLE_AUDIT_LOG=false
 ENABLE_AUDIT_EXPORT=false
 ENABLE_SKILL_DOWNLOAD_ENCRYPTION=true
 ENABLE_LOCAL_CACHE_ENCRYPTION=true
+ENABLE_CACHE_OFFLINE_FALLBACK=true
 ENABLE_SANDBOX_EXECUTION=false
 ENABLE_RESOURCE_QUOTA=false
 ENABLE_NETWORK_EGRESS_CONTROL=false

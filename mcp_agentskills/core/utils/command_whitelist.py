@@ -1,6 +1,8 @@
 import re
 from typing import Set
 
+from mcp_agentskills.config.settings import settings
+
 ALLOWED_COMMANDS: Set[str] = {
     "python",
     "python3",
@@ -20,6 +22,20 @@ BLOCKED_PATTERNS: list[str] = [
     r"\.\.\\",
 ]
 
+NETWORK_EGRESS_PATTERNS: list[str] = [
+    r"https?://",
+    r"\burllib\.request\b",
+    r"\brequests\.",
+    r"\bsocket\b",
+    r"\bhttpx\.",
+    r"\bwebsockets?\b",
+    r"\bping\b",
+    r"\bnslookup\b",
+    r"\btraceroute\b",
+    r"\bcurl\b",
+    r"\bwget\b",
+]
+
 
 def validate_command(command: str) -> tuple[bool, str]:
     cmd_parts = command.split()
@@ -33,5 +49,10 @@ def validate_command(command: str) -> tuple[bool, str]:
     for pattern in BLOCKED_PATTERNS:
         if re.search(pattern, command, re.IGNORECASE):
             return False, f"Command contains blocked pattern: {pattern}"
+
+    if settings.ENABLE_NETWORK_EGRESS_CONTROL:
+        for pattern in NETWORK_EGRESS_PATTERNS:
+            if re.search(pattern, command, re.IGNORECASE):
+                return False, "Command contains blocked network egress pattern"
 
     return True, "OK"

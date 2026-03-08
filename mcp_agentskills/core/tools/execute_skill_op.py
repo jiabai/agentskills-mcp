@@ -2,6 +2,7 @@ import asyncio
 import json
 import os
 from time import perf_counter
+from typing import Any
 
 from flowllm.core.context import C
 from flowllm.core.op import BaseAsyncToolOp
@@ -20,6 +21,36 @@ from mcp_agentskills.repositories.skill_version import SkillVersionRepository
 from mcp_agentskills.repositories.user import UserRepository
 from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.skill import SkillService
+
+_execution_control: Any = None
+_execution_control_mod: Any = None
+try:
+    from mcp_agentskills.core.utils import execution_control as _execution_control_mod
+except Exception:
+    pass
+if _execution_control_mod is not None:
+    _execution_control = _execution_control_mod
+
+
+async def acquire_execution_slot(user_id: str, team_id: str | None):
+    if _execution_control is None:
+        async def _release():
+            return None
+
+        return _release
+    return await _execution_control.acquire_execution_slot(user_id, team_id)
+
+
+def is_within_workdir_quota(path, max_bytes: int | None = None) -> bool:
+    if _execution_control is None:
+        return True
+    return _execution_control.is_within_workdir_quota(path, max_bytes=max_bytes)
+
+
+def truncate_output(output: str, max_bytes: int | None = None) -> str:
+    if _execution_control is None:
+        return output
+    return _execution_control.truncate_output(output, max_bytes=max_bytes)
 
 
 def _entrypoint_to_command(entrypoint: str) -> str | None:
@@ -54,6 +85,7 @@ class ExecuteSkillOp(BaseAsyncToolOp):
 
     async def async_execute(self):
         exception: Exception | None = None
+        release_slot = None
         try:
             self._output = None
             user_id = get_current_user_id()
@@ -94,6 +126,14 @@ class ExecuteSkillOp(BaseAsyncToolOp):
                     self._set_output(tool_error_payload("Version not found", "VERSION_NOT_FOUND"))
                     return
                 version_dir = get_skill_versions_dir(user_id, skill.name) / version
+                if settings.ENABLE_RESOURCE_QUOTA and not is_within_workdir_quota(version_dir):
+                    self._set_output(tool_error_payload("Work directory quota exceeded", "QUOTA_EXCEEDED"))
+                    return
+                if settings.ENABLE_RESOURCE_QUOTA:
+                    release_slot = await acquire_execution_slot(str(user.id), user.team_id)
+                    if release_slot is None:
+                        self._set_output(tool_error_payload("Execution concurrency limit exceeded", "CONCURRENCY_LIMIT"))
+                        return
                 skill_md_path = version_dir / "SKILL.md"
                 if not skill_md_path.exists():
                     self._set_output(tool_error_payload("SKILL.md not found", "SKILL_MD_NOT_FOUND"))
@@ -115,18 +155,28 @@ class ExecuteSkillOp(BaseAsyncToolOp):
                     self._set_output(tool_error_payload(error_msg, "COMMAND_BLOCKED"))
                     return
                 env = os.environ.copy()
+                if settings.ENABLE_SANDBOX_EXECUTION:
+                    env = {"PATH": env.get("PATH", ""), "SKILL_PARAMS": ""}
                 env["SKILL_PARAMS"] = json.dumps(parameters, ensure_ascii=False)
                 start = perf_counter()
-                proc = await asyncio.create_subprocess_shell(
+                proc = await asyncio.subprocess.create_subprocess_shell(
                     f"cd {version_dir} && {command}",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                     env=env,
                 )
-                stdout, stderr = await proc.communicate()
+                status = "success"
+                timeout_seconds = max(1, int(settings.SKILL_EXECUTION_TIMEOUT_SECONDS))
+                try:
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout_seconds)
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    stdout, stderr = await proc.communicate()
+                    status = "timeout"
                 duration_ms = int((perf_counter() - start) * 1000)
-                output = (stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip()
-                status = "success" if proc.returncode == 0 else "error"
+                output = truncate_output((stdout.decode(errors="replace") + stderr.decode(errors="replace")).strip())
+                if status != "timeout":
+                    status = "success" if proc.returncode == 0 else "error"
                 if settings.ENABLE_AUDIT_LOG:
                     audit_service = AuditService(AuditLogRepository(session))
                     await audit_service.create_event(
@@ -147,6 +197,8 @@ class ExecuteSkillOp(BaseAsyncToolOp):
             exception = exc
             raise
         finally:
+            if release_slot is not None:
+                await release_slot()
             await record_tool_call(
                 "execute_skill",
                 output=getattr(self, "_output", None),

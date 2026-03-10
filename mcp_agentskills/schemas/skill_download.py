@@ -4,12 +4,12 @@ from pydantic import BaseModel
 
 
 class SkillDownloadRequest(BaseModel):
-    skill_id: str
+    skill_uuid: str
     version: str | None = None
 
 
 class SkillDownloadResponse(BaseModel):
-    skill_id: str
+    skill_uuid: str
     version: str
     encrypted_code: str
     checksum: str

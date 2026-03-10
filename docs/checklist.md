@@ -404,19 +404,19 @@
   - [x] 创建 Skill 目录
 - [x] GET `/api/v1/skills/cache-policy`
   - [x] 返回缓存 TTL 与加密策略
-- [x] GET `/api/v1/skills/{skill_id}`
+- [x] GET `/api/v1/skills/{skill_uuid}`
   - [x] 返回 Skill 详情
-- [x] PUT `/api/v1/skills/{skill_id}`
+- [x] PUT `/api/v1/skills/{skill_uuid}`
   - [x] 更新 Skill 信息
-- [x] DELETE `/api/v1/skills/{skill_id}`
+- [x] DELETE `/api/v1/skills/{skill_uuid}`
   - [x] 删除 Skill 及文件
 - [x] POST `/api/v1/skills/upload`
   - [x] 支持 multipart 上传
   - [x] 文件大小限制
   - [x] 文件类型验证
-- [x] GET `/api/v1/skills/{skill_id}/files`
+- [x] GET `/api/v1/skills/{skill_uuid}/files`
   - [x] 返回文件列表
-- [x] GET `/api/v1/skills/{skill_id}/files/{file_path:path}`
+- [x] GET `/api/v1/skills/{skill_uuid}/files/{file_path:path}`
   - [x] 返回指定文件文本内容
 
 ### 7.6 Dashboard 接口

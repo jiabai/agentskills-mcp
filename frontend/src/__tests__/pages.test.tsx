@@ -5,7 +5,7 @@ import LoginPage from "@/app/login/page"
 import RegisterPage from "@/app/register/page"
 import DashboardPage from "@/app/dashboard/page"
 import SkillsPage from "@/app/skills/page"
-import SkillDetailPage from "@/app/skills/[skillId]/page"
+import SkillDetailPage from "@/app/skills/[skillUuid]/page"
 import TokensPage from "@/app/tokens/page"
 import ProfilePage from "@/app/profile/page"
 import SecurityPage from "@/app/security/page"
@@ -82,7 +82,7 @@ describe("console pages", () => {
   })
 
   it("renders skill detail tabs", async () => {
-    render(<SkillDetailPage params={{ skillId: "demo" }} />)
+    render(<SkillDetailPage params={{ skillUuid: "demo" }} />)
     expect(await screen.findByRole("heading", { name: "Skill 详情" })).toBeInTheDocument()
     expect(await screen.findByRole("tab", { name: "概览" })).toBeInTheDocument()
     expect(screen.getByRole("tab", { name: "文件" })).toBeInTheDocument()

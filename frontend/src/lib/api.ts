@@ -258,17 +258,17 @@ export const api = {
     apiFetch<{ items: Skill[]; total: number }>(`/api/v1/skills${query ? `?q=${encodeURIComponent(query)}` : ""}`),
   createSkill: (payload: { name: string; description?: string | null; tags?: string[] }) =>
     apiFetch<Skill>("/api/v1/skills", { method: "POST", body: JSON.stringify(payload) }),
-  getSkill: (skillId: string) => apiFetch<Skill>(`/api/v1/skills/${skillId}`),
-  updateSkill: (skillId: string, payload: { name?: string; description?: string | null; tags?: string[] }) =>
-    apiFetch<Skill>(`/api/v1/skills/${skillId}`, { method: "PUT", body: JSON.stringify(payload) }),
-  deleteSkill: (skillId: string) => apiFetch(`/api/v1/skills/${skillId}`, { method: "DELETE" }),
-  listSkillFiles: (skillId: string) => apiFetch<string[]>(`/api/v1/skills/${skillId}/files`),
-  getSkillFileContent: (skillId: string, filePath: string) =>
-    apiFetchText(`/api/v1/skills/${skillId}/files/${encodeURIComponent(filePath)}`),
-  uploadSkillFile: async (skillId: string, file: File) => {
+  getSkill: (skillUuid: string) => apiFetch<Skill>(`/api/v1/skills/${skillUuid}`),
+  updateSkill: (skillUuid: string, payload: { name?: string; description?: string | null; tags?: string[] }) =>
+    apiFetch<Skill>(`/api/v1/skills/${skillUuid}`, { method: "PUT", body: JSON.stringify(payload) }),
+  deleteSkill: (skillUuid: string) => apiFetch(`/api/v1/skills/${skillUuid}`, { method: "DELETE" }),
+  listSkillFiles: (skillUuid: string) => apiFetch<string[]>(`/api/v1/skills/${skillUuid}/files`),
+  getSkillFileContent: (skillUuid: string, filePath: string) =>
+    apiFetchText(`/api/v1/skills/${skillUuid}/files/${encodeURIComponent(filePath)}`),
+  uploadSkillFile: async (skillUuid: string, file: File) => {
     const tokens = getStoredTokens()
     const formData = new FormData()
-    formData.append("skill_id", skillId)
+    formData.append("skill_uuid", skillUuid)
     formData.append("file", file)
     const response = await fetch(`${apiBaseUrl}/api/v1/skills/upload`, {
       method: "POST",

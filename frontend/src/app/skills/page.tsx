@@ -39,8 +39,8 @@ export default function SkillsPage() {
     loadSkills(query)
   }
 
-  const handleDelete = async (skillId: string) => {
-    await api.deleteSkill(skillId)
+  const handleDelete = async (skillUuid: string) => {
+    await api.deleteSkill(skillUuid)
     await loadSkills(query)
   }
 
@@ -98,7 +98,9 @@ export default function SkillsPage() {
             </CardContent>
           </Card>
         ) : null}
-        {skills.map((skill) => (
+        {skills.map((skill) => {
+          const skillUuid = skill.id
+          return (
           <Card key={skill.id}>
             <CardHeader className="flex flex-row items-start justify-between gap-4">
               <div className="space-y-2">
@@ -111,7 +113,7 @@ export default function SkillsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <Button variant="outline" asChild>
-                  <Link href={`/skills/${skill.id}`}>查看</Link>
+                  <Link href={`/skills/${skillUuid}`}>查看</Link>
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -126,14 +128,15 @@ export default function SkillsPage() {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>取消</AlertDialogCancel>
-                      <AlertDialogAction onClick={() => handleDelete(skill.id)}>确认删除</AlertDialogAction>
+                      <AlertDialogAction onClick={() => handleDelete(skillUuid)}>确认删除</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
               </div>
             </CardHeader>
           </Card>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

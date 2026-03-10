@@ -72,7 +72,7 @@ class ExecuteSkillOp(BaseAsyncToolOp):
                 "name": "execute_skill",
                 "description": "Execute a skill from enterprise cloud",
                 "input_schema": {
-                    "skill_id": {"type": "string", "description": "Skill ID", "required": True},
+                    "skill_uuid": {"type": "string", "description": "Skill UUID", "required": True},
                     "version": {"type": "string", "description": "Skill version", "required": False},
                     "parameters": {"type": "object", "description": "Skill parameters", "required": False},
                 },
@@ -92,7 +92,7 @@ class ExecuteSkillOp(BaseAsyncToolOp):
             if not user_id:
                 self._set_output(tool_error_payload("Unauthorized", "UNAUTHORIZED"))
                 return
-            skill_id = self.input_dict["skill_id"]
+            skill_uuid = self.input_dict["skill_uuid"]
             version_input = self.input_dict.get("version")
             parameters = self.input_dict.get("parameters") or {}
             async for session in db_session.get_async_session():
@@ -106,7 +106,7 @@ class ExecuteSkillOp(BaseAsyncToolOp):
                 if not has_permission(user, "skill.execute"):
                     self._set_output(tool_error_payload("Permission denied", "PERMISSION_DENIED"))
                     return
-                skill = await skill_repo.get_by_id(skill_id)
+                skill = await skill_repo.get_by_id(skill_uuid)
                 if not skill or not is_skill_visible(user, skill):
                     self._set_output(tool_error_payload("Skill not found", "SKILL_NOT_FOUND"))
                     return

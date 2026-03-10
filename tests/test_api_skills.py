@@ -146,7 +146,7 @@ async def test_skill_upload_and_list_files(client, tmp_path, monkeypatch):
     )
     skill_id = created.json()["id"]
     files = {"file": ("reference.md", b"hello", "text/markdown")}
-    data = {"skill_id": skill_id}
+    data = {"skill_uuid": skill_id}
     uploaded = await client.post("/api/v1/skills/upload", data=data, files=files, headers=headers)
     assert uploaded.status_code == 201
     listed = await client.get(f"/api/v1/skills/{skill_id}/files", headers=headers)
@@ -193,7 +193,7 @@ async def test_skill_zip_upload_creates_version(client, tmp_path, monkeypatch):
         archive.writestr("reference.md", "hello")
     buffer.seek(0)
     files = {"file": ("skill.zip", buffer.read(), "application/zip")}
-    data = {"skill_id": skill_id}
+    data = {"skill_uuid": skill_id}
     uploaded = await client.post("/api/v1/skills/upload", data=data, files=files, headers=headers)
     assert uploaded.status_code == 201
     payload = uploaded.json()
@@ -242,7 +242,7 @@ async def test_skill_version_rollback_restores_files(client, tmp_path, monkeypat
     first.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", first.read(), "application/zip")},
         headers=headers,
     )
@@ -252,7 +252,7 @@ async def test_skill_version_rollback_restores_files(client, tmp_path, monkeypat
     second.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", second.read(), "application/zip")},
         headers=headers,
     )
@@ -338,7 +338,7 @@ async def test_skill_deactivate_blocks_file_access(client, tmp_path, monkeypatch
     buffer.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", buffer.read(), "application/zip")},
         headers=headers,
     )
@@ -386,7 +386,7 @@ async def test_skill_install_instructions_returns_client_strategy(client, tmp_pa
     buffer.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", buffer.read(), "application/zip")},
         headers=headers,
     )
@@ -435,7 +435,7 @@ async def test_skill_install_instructions_reads_requirements_file(client, tmp_pa
     buffer.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", buffer.read(), "application/zip")},
         headers=headers,
     )
@@ -481,7 +481,7 @@ async def test_skill_versions_diff_returns_modified_files(client, tmp_path, monk
     first.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", first.read(), "application/zip")},
         headers=headers,
     )
@@ -493,7 +493,7 @@ async def test_skill_versions_diff_returns_modified_files(client, tmp_path, monk
     second.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", second.read(), "application/zip")},
         headers=headers,
     )
@@ -543,7 +543,7 @@ async def test_skill_version_auto_increment(client, tmp_path, monkeypatch):
     first.seek(0)
     uploaded_first = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", first.read(), "application/zip")},
         headers=headers,
     )
@@ -555,7 +555,7 @@ async def test_skill_version_auto_increment(client, tmp_path, monkeypatch):
     second.seek(0)
     uploaded_second = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", second.read(), "application/zip")},
         headers=headers,
     )
@@ -603,7 +603,7 @@ async def test_skill_version_auto_increment_with_minor_strategy(client, tmp_path
         first.seek(0)
         uploaded_first = await client.post(
             "/api/v1/skills/upload",
-            data={"skill_id": skill_id},
+            data={"skill_uuid": skill_id},
             files={"file": ("skill.zip", first.read(), "application/zip")},
             headers=headers,
         )
@@ -615,7 +615,7 @@ async def test_skill_version_auto_increment_with_minor_strategy(client, tmp_path
         second.seek(0)
         uploaded_second = await client.post(
             "/api/v1/skills/upload",
-            data={"skill_id": skill_id},
+            data={"skill_uuid": skill_id},
             files={"file": ("skill.zip", second.read(), "application/zip")},
             headers=headers,
         )
@@ -658,7 +658,7 @@ async def test_skill_version_conflict_auto_bump_patch_strategy(client, tmp_path,
     first.seek(0)
     uploaded_first = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", first.read(), "application/zip")},
         headers=headers,
     )
@@ -670,7 +670,7 @@ async def test_skill_version_conflict_auto_bump_patch_strategy(client, tmp_path,
     second.seek(0)
     uploaded_second = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", second.read(), "application/zip")},
         headers=headers,
     )
@@ -714,7 +714,7 @@ async def test_skill_version_conflict_auto_bump_minor_strategy(client, tmp_path,
         first.seek(0)
         uploaded_first = await client.post(
             "/api/v1/skills/upload",
-            data={"skill_id": skill_id},
+            data={"skill_uuid": skill_id},
             files={"file": ("skill.zip", first.read(), "application/zip")},
             headers=headers,
         )
@@ -726,7 +726,7 @@ async def test_skill_version_conflict_auto_bump_minor_strategy(client, tmp_path,
         second.seek(0)
         uploaded_second = await client.post(
             "/api/v1/skills/upload",
-            data={"skill_id": skill_id},
+            data={"skill_uuid": skill_id},
             files={"file": ("skill.zip", second.read(), "application/zip")},
             headers=headers,
         )
@@ -812,7 +812,7 @@ async def test_skill_dependency_spec_frontmatter_yaml(client, tmp_path, monkeypa
     buffer.seek(0)
     uploaded = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", buffer.read(), "application/zip")},
         headers=headers,
     )

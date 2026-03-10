@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
 type SkillDetailProps = {
-  params: { skillId: string }
+  params: { skillUuid: string }
 }
 
 export default function SkillDetailPage({ params }: SkillDetailProps) {
@@ -36,18 +36,18 @@ export default function SkillDetailPage({ params }: SkillDetailProps) {
     setStatus("loading")
     setError(null)
     try {
-      const data = await api.getSkill(params.skillId)
+      const data = await api.getSkill(params.skillUuid)
       setSkill(data)
       setName(data.name)
       setDescription(data.description || "")
-      const fileList = await api.listSkillFiles(params.skillId)
+      const fileList = await api.listSkillFiles(params.skillUuid)
       setFiles(fileList)
       setStatus("ready")
     } catch (err) {
       setStatus("error")
       setError(err instanceof Error ? err.message : "加载失败")
     }
-  }, [params.skillId])
+  }, [params.skillUuid])
 
   useEffect(() => {
     fetchData()

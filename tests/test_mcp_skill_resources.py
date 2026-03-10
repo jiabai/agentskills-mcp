@@ -137,7 +137,7 @@ async def test_skill_resource_ops_return_metadata(async_session, tmp_path, monke
     assert skills[0]["version"] == "1.0.0"
     assert skills[0]["visible"] == "team"
     detail_op = SkillDetailResourceOp()
-    detail_op.input_dict = {"skill_id": skill.id, "version": "1.0.0"}
+    detail_op.input_dict = {"skill_uuid": skill.id, "version": "1.0.0"}
     await detail_op.async_execute()
     detail_payload = json.loads(detail_op._output)
     detail = json.loads(detail_payload["contents"][0]["text"])
@@ -231,7 +231,7 @@ async def test_execute_skill_runs_entrypoint(async_session, tmp_path, monkeypatc
     from mcp_agentskills.core.tools.execute_skill_op import ExecuteSkillOp
 
     op = ExecuteSkillOp()
-    op.input_dict = {"skill_id": skill.id, "version": "1.0.0", "parameters": {"foo": "bar"}}
+    op.input_dict = {"skill_uuid": skill.id, "version": "1.0.0", "parameters": {"foo": "bar"}}
     await op.async_execute()
     payload = json.loads(op._output)
     assert payload["result"]["status"] == "success"

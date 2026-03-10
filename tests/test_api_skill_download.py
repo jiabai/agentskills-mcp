@@ -41,13 +41,13 @@ async def test_skill_download_returns_encrypted_payload(client, tmp_path, monkey
     buffer.seek(0)
     await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", buffer.read(), "application/zip")},
         headers=headers,
     )
     response = await client.post(
         "/api/v1/skills/download",
-        json={"skill_id": skill_id, "version": "1.0.0"},
+        json={"skill_uuid": skill_id, "version": "1.0.0"},
         headers=headers,
     )
     assert response.status_code == 200
@@ -55,7 +55,7 @@ async def test_skill_download_returns_encrypted_payload(client, tmp_path, monkey
     encrypted = base64.b64decode(payload["encrypted_code"])
     digest = hashlib.sha256(encrypted).hexdigest()
     assert payload["checksum"] == f"sha256:{digest}"
-    assert payload["skill_id"] == skill_id
+    assert payload["skill_uuid"] == skill_id
     assert payload["version"] == "1.0.0"
     expires_at = datetime.fromisoformat(payload["expires_at"].replace("Z", "+00:00"))
     assert expires_at > datetime.now(timezone.utc)

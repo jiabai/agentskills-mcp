@@ -137,11 +137,11 @@
 | T3.5.1 | 创建 Skill 存储工具 | 创建 `core/utils/skill_storage.py` | T1.1.1 | ✅ |
 | T3.5.2 | 实现列出Skills | GET /api/v1/skills | T2.4.4, T3.5.1, T3.1.1 | ✅ |
 | T3.5.3 | 实现创建Skill | POST /api/v1/skills | T2.4.4, T3.5.1, T3.1.1 | ✅ |
-| T3.5.4 | 实现获取Skill详情 | GET /api/v1/skills/{skill_id} | T2.4.4, T3.1.1 | ✅ |
-| T3.5.5 | 实现更新Skill | PUT /api/v1/skills/{skill_id} | T2.4.4, T3.1.1 | ✅ |
-| T3.5.6 | 实现删除Skill | DELETE /api/v1/skills/{skill_id} | T2.4.4, T3.1.1 | ✅ |
+| T3.5.4 | 实现获取Skill详情 | GET /api/v1/skills/{skill_uuid} | T2.4.4, T3.1.1 | ✅ |
+| T3.5.5 | 实现更新Skill | PUT /api/v1/skills/{skill_uuid} | T2.4.4, T3.1.1 | ✅ |
+| T3.5.6 | 实现删除Skill | DELETE /api/v1/skills/{skill_uuid} | T2.4.4, T3.1.1 | ✅ |
 | T3.5.7 | 实现上传Skill文件 | POST /api/v1/skills/upload | T2.4.4, T3.5.1, T3.1.1 | ✅ |
-| T3.5.8 | 实现列出Skill文件 | GET /api/v1/skills/{skill_id}/files | T2.4.4, T3.5.1, T3.1.1 | ✅ |
+| T3.5.8 | 实现列出Skill文件 | GET /api/v1/skills/{skill_uuid}/files | T2.4.4, T3.5.1, T3.1.1 | ✅ |
 | T3.5.9 | 创建Skill路由 | 创建 `api/v1/skills.py` | T3.5.2-T3.5.8 | ✅ |
 
 ### 3.6 路由汇总
@@ -159,7 +159,7 @@
 | T3.7.1 | 实现绑定邮箱接口 | POST `/api/v1/users/bind-email` | T3.2.1, T3.1.1 | ✅ |
 | T3.7.2 | 实现身份更新接口 | PUT `/api/v1/users/{user_id}/identity`（需 `user.manage`） | T3.3.5 | ✅ |
 | T3.7.3 | 实现缓存策略接口 | GET `/api/v1/skills/cache-policy` | T3.5.9 | ✅ |
-| T3.7.4 | 实现文件内容读取接口 | GET `/api/v1/skills/{skill_id}/files/{file_path:path}` | T3.5.9 | ✅ |
+| T3.7.4 | 实现文件内容读取接口 | GET `/api/v1/skills/{skill_uuid}/files/{file_path:path}` | T3.5.9 | ✅ |
 | T3.7.5 | 创建 Dashboard 路由 | 创建 `api/v1/dashboard.py` | T3.6.1 | ✅ |
 | T3.7.6 | 创建 Audit 路由 | 创建 `api/v1/audit.py` | T3.6.1 | ✅ |
 | T3.7.7 | 扩展路由汇总 | 在 `api/router.py` 注册 dashboard/audit 路由 | T3.7.5, T3.7.6 | ✅ |

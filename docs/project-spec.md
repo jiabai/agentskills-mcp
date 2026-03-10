@@ -77,8 +77,8 @@
 
 ```json
 {
-  "skill_id": "china-stock-analysis",
-  "name": "China Stock Analysis",
+  "skill_id": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
+  "name": "china-stock-analysis",
   "version": "1.2.0",
   "visible": "enterprise",
   "updated_at": "2026-03-06T12:00:00Z"
@@ -168,7 +168,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 - 统一校验：API 与 MCP 入口共用同一权限判定逻辑
 
 **MCP/REST 接口契约**
-- `skill://list`：返回可见技能列表（含 `skill_id`、`name`、`version`、`visible`、`updated_at`）
+- `skill://list`：返回可见技能列表（含 `skill_id`〈UUID〉、`name`〈可读稳定标识〉、`version`、`visible`、`updated_at`）
 - `skill://{id}@{version}`：返回技能元数据、依赖与参数定义
 - `execute_skill`：按版本执行技能，权限按可见性与 RBAC 双重校验
 - `skills/download`：仅对授权用户提供，默认加密传输
@@ -808,19 +808,19 @@ class DeprecationNotifier:
 | `/` | GET | 是 | 列出用户的Skills（分页，支持 include_inactive） |
 | `/` | POST | 是 | 创建新Skill |
 | `/cache-policy` | GET | 是 | 获取客户端缓存策略（TTL/是否加密） |
-| `/{skill_id}` | GET | 是 | 获取Skill详情 |
-| `/{skill_id}` | PUT | 是 | 更新Skill信息 |
-| `/{skill_id}` | DELETE | 是 | 删除Skill |
+| `/{skill_uuid}` | GET | 是 | 获取Skill详情 |
+| `/{skill_uuid}` | PUT | 是 | 更新Skill信息 |
+| `/{skill_uuid}` | DELETE | 是 | 删除Skill |
 | `/upload` | POST | 是 | 上传Skill文件（multipart，支持 zip 与 metadata） |
 | `/download` | POST | 是 | 下载指定版本Skill压缩包（加密传输） |
-| `/{skill_id}/files` | GET | 是 | 列出Skill文件 |
-| `/{skill_id}/files/{file_path:path}` | GET | 是 | 读取指定文件内容（文本） |
-| `/{skill_id}/deactivate` | POST | 是 | 下架Skill（写入 cache_revoked_at） |
-| `/{skill_id}/activate` | POST | 是 | 启用Skill |
-| `/{skill_id}/versions` | GET | 是 | 列出Skill版本 |
-| `/{skill_id}/versions/{version}/rollback` | POST | 是 | 回滚到指定版本 |
-| `/{skill_id}/versions/{version}/install-instructions` | GET | 是 | 获取客户端依赖安装指引 |
-| `/{skill_id}/versions/diff` | GET | 是 | 比较两个版本的文件差异 |
+| `/{skill_uuid}/files` | GET | 是 | 列出Skill文件 |
+| `/{skill_uuid}/files/{file_path:path}` | GET | 是 | 读取指定文件内容（文本） |
+| `/{skill_uuid}/deactivate` | POST | 是 | 下架Skill（写入 cache_revoked_at） |
+| `/{skill_uuid}/activate` | POST | 是 | 启用Skill |
+| `/{skill_uuid}/versions` | GET | 是 | 列出Skill版本 |
+| `/{skill_uuid}/versions/{version}/rollback` | POST | 是 | 回滚到指定版本 |
+| `/{skill_uuid}/versions/{version}/install-instructions` | GET | 是 | 获取客户端依赖安装指引 |
+| `/{skill_uuid}/versions/diff` | GET | 是 | 比较两个版本的文件差异 |
 
 **当前实现状态（已落地到代码）**
 
@@ -971,7 +971,7 @@ class DeprecationNotifier:
 
 ```json
 {
-  "skill_id": "china-stock-analysis",
+  "skill_uuid": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0"
 }
 ```
@@ -980,7 +980,7 @@ class DeprecationNotifier:
 
 ```json
 {
-  "skill_id": "china-stock-analysis",
+  "skill_uuid": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0",
   "encrypted_code": "base64(...)",
   "expires_at": "2026-03-06T12:00:00Z",
@@ -1387,7 +1387,7 @@ async def async_execute(self):
 
 为对齐企业 P0 的 `execute_skill` 工具契约，提供 `execute_skill` Tool：
 
-- 输入：`skill_id`、可选 `version`、可选 `parameters`
+- 输入：`skill_uuid`（UUID）、可选 `version`、可选 `parameters`
 - 执行：从目标版本的 `SKILL.md` 解析 `command` 或 `entrypoint` 推导命令
 - 安全：命令执行受白名单限制，拒绝危险命令
 - 参数：通过环境变量 `SKILL_PARAMS` 传入 JSON 字符串

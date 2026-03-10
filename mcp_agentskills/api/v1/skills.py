@@ -101,9 +101,9 @@ async def create_skill(
     return skill
 
 
-@router.get("/{skill_id}", response_model=SkillResponse)
+@router.get("/{skill_uuid}", response_model=SkillResponse)
 async def get_skill(
-    skill_id: str,
+    skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
@@ -111,15 +111,15 @@ async def get_skill(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     try:
-        skill = await service.get_skill(current_user, skill_id)
+        skill = await service.get_skill(current_user, skill_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return skill
 
 
-@router.put("/{skill_id}", response_model=SkillResponse)
+@router.put("/{skill_uuid}", response_model=SkillResponse)
 async def update_skill(
-    skill_id: str,
+    skill_uuid: str,
     payload: SkillUpdate,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -132,15 +132,15 @@ async def update_skill(
     if visible is not None:
         fields["visibility"] = visible
     try:
-        skill = await service.update_skill(current_user, skill_id, **fields)
+        skill = await service.update_skill(current_user, skill_uuid, **fields)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return skill
 
 
-@router.delete("/{skill_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{skill_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_skill(
-    skill_id: str,
+    skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
@@ -148,7 +148,7 @@ async def delete_skill(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     try:
-        await service.delete_skill(current_user, skill_id)
+        await service.delete_skill(current_user, skill_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return None
@@ -157,7 +157,7 @@ async def delete_skill(
 @router.post("/upload", status_code=status.HTTP_201_CREATED)
 async def upload_skill_file(
     request: Request,
-    skill_id: str = Form(...),
+    skill_uuid: str = Form(...),
     file: UploadFile = File(...),
     metadata: str | None = Form(None),
     current_user=Depends(get_current_active_user),
@@ -170,19 +170,19 @@ async def upload_skill_file(
     try:
         filename = file.filename or ""
         if filename.lower().endswith(".zip"):
-            payload = await service.upload_zip(current_user, skill_id, filename, content, metadata)
+            payload = await service.upload_zip(current_user, skill_uuid, filename, content, metadata)
             if settings.ENABLE_AUDIT_LOG:
                 audit_service = AuditService(AuditLogRepository(session))
                 await audit_service.create_event(
                     actor_id=current_user.id,
                     action="skill.upload",
-                    target=skill_id,
+                    target=skill_uuid,
                     ip=request.client.host if request and request.client else "",
                     user_agent=request.headers.get("user-agent", ""),
                     metadata={"filename": filename, "archive": True, "version": payload.get("version")},
                 )
             return payload
-        filename = await service.upload_file(current_user, skill_id, filename, content)
+        filename = await service.upload_file(current_user, skill_uuid, filename, content)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if settings.ENABLE_AUDIT_LOG:
@@ -190,7 +190,7 @@ async def upload_skill_file(
         await audit_service.create_event(
             actor_id=current_user.id,
             action="skill.upload",
-            target=skill_id,
+            target=skill_uuid,
             ip=request.client.host if request and request.client else "",
             user_agent=request.headers.get("user-agent", ""),
             metadata={"filename": filename, "archive": False},
@@ -209,7 +209,7 @@ async def download_skill(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        result = await service.download_skill(current_user, payload.skill_id, payload.version)
+        result = await service.download_skill(current_user, payload.skill_uuid, payload.version)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     response_payload = SkillDownloadResponse.model_validate(result)
@@ -218,23 +218,23 @@ async def download_skill(
         await audit_service.create_event(
             actor_id=current_user.id,
             action="skill.download",
-            target=payload.skill_id,
+            target=payload.skill_uuid,
             ip=request.client.host if request and request.client else "",
             user_agent=request.headers.get("user-agent", ""),
         )
     return response_payload
 
 
-@router.post("/{skill_id}/deactivate", response_model=SkillResponse)
+@router.post("/{skill_uuid}/deactivate", response_model=SkillResponse)
 async def deactivate_skill(
     request: Request,
-    skill_id: str,
+    skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        skill = await service.deactivate_skill(current_user, skill_id)
+        skill = await service.deactivate_skill(current_user, skill_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if settings.ENABLE_AUDIT_LOG:
@@ -242,23 +242,23 @@ async def deactivate_skill(
         await audit_service.create_event(
             actor_id=current_user.id,
             action="skill.deactivate",
-            target=skill_id,
+            target=skill_uuid,
             ip=request.client.host if request and request.client else "",
             user_agent=request.headers.get("user-agent", ""),
         )
     return skill
 
 
-@router.post("/{skill_id}/activate", response_model=SkillResponse)
+@router.post("/{skill_uuid}/activate", response_model=SkillResponse)
 async def activate_skill(
     request: Request,
-    skill_id: str,
+    skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        skill = await service.activate_skill(current_user, skill_id)
+        skill = await service.activate_skill(current_user, skill_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if settings.ENABLE_AUDIT_LOG:
@@ -266,37 +266,37 @@ async def activate_skill(
         await audit_service.create_event(
             actor_id=current_user.id,
             action="skill.activate",
-            target=skill_id,
+            target=skill_uuid,
             ip=request.client.host if request and request.client else "",
             user_agent=request.headers.get("user-agent", ""),
         )
     return skill
 
 
-@router.get("/{skill_id}/versions", response_model=SkillVersionListResponse)
+@router.get("/{skill_uuid}/versions", response_model=SkillVersionListResponse)
 async def list_skill_versions(
-    skill_id: str,
+    skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        versions = await service.list_versions(current_user, skill_id)
+        versions = await service.list_versions(current_user, skill_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return SkillVersionListResponse(items=[SkillVersionResponse.model_validate(item) for item in versions])
 
 
-@router.get("/{skill_id}/versions/{version}/install-instructions", response_model=SkillInstallInstructionsResponse)
+@router.get("/{skill_uuid}/versions/{version}/install-instructions", response_model=SkillInstallInstructionsResponse)
 async def get_install_instructions(
-    skill_id: str,
+    skill_uuid: str,
     version: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        payload = await service.get_install_instructions(current_user, skill_id, version)
+        payload = await service.get_install_instructions(current_user, skill_uuid, version)
     except ValueError as exc:
         if str(exc) == "SKILL_DEACTIVATED":
             raise HTTPException(
@@ -307,9 +307,9 @@ async def get_install_instructions(
     return SkillInstallInstructionsResponse.model_validate(payload)
 
 
-@router.get("/{skill_id}/versions/diff", response_model=SkillVersionDiffResponse)
+@router.get("/{skill_uuid}/versions/diff", response_model=SkillVersionDiffResponse)
 async def diff_skill_versions(
-    skill_id: str,
+    skill_uuid: str,
     from_version: str = Query(..., alias="from"),
     to_version: str = Query(..., alias="to"),
     current_user=Depends(get_current_active_user),
@@ -317,7 +317,7 @@ async def diff_skill_versions(
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        payload = await service.diff_versions(current_user, skill_id, from_version, to_version)
+        payload = await service.diff_versions(current_user, skill_uuid, from_version, to_version)
     except ValueError as exc:
         if str(exc) == "SKILL_DEACTIVATED":
             raise HTTPException(
@@ -328,17 +328,17 @@ async def diff_skill_versions(
     return SkillVersionDiffResponse.model_validate(payload)
 
 
-@router.post("/{skill_id}/versions/{version}/rollback", response_model=SkillVersionResponse)
+@router.post("/{skill_uuid}/versions/{version}/rollback", response_model=SkillVersionResponse)
 async def rollback_skill_version(
     request: Request,
-    skill_id: str,
+    skill_uuid: str,
     version: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        record = await service.rollback_version(current_user, skill_id, version)
+        record = await service.rollback_version(current_user, skill_uuid, version)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     if settings.ENABLE_AUDIT_LOG:
@@ -346,7 +346,7 @@ async def rollback_skill_version(
         await audit_service.create_event(
             actor_id=current_user.id,
             action="skill.rollback",
-            target=skill_id,
+            target=skill_uuid,
             ip=request.client.host if request and request.client else "",
             user_agent=request.headers.get("user-agent", ""),
             metadata={"version": version},
@@ -354,15 +354,15 @@ async def rollback_skill_version(
     return SkillVersionResponse.model_validate(record)
 
 
-@router.get("/{skill_id}/files")
+@router.get("/{skill_uuid}/files")
 async def list_skill_files(
-    skill_id: str,
+    skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session))
     try:
-        files = await service.list_skill_files(current_user, skill_id)
+        files = await service.list_skill_files(current_user, skill_uuid)
     except ValueError as exc:
         if str(exc) == "SKILL_DEACTIVATED":
             raise HTTPException(
@@ -373,16 +373,16 @@ async def list_skill_files(
     return files
 
 
-@router.get("/{skill_id}/files/{file_path:path}")
+@router.get("/{skill_uuid}/files/{file_path:path}")
 async def read_skill_file(
-    skill_id: str,
+    skill_uuid: str,
     file_path: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
     service = SkillService(SkillRepository(session), SkillVersionRepository(session))
     try:
-        content = await service.read_skill_file(current_user, skill_id, file_path)
+        content = await service.read_skill_file(current_user, skill_uuid, file_path)
     except ValueError as exc:
         if str(exc) == "SKILL_DEACTIVATED":
             raise HTTPException(

@@ -40,7 +40,7 @@ async def test_audit_log_query_and_export(client):
     first.seek(0)
     upload_first = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", first.read(), "application/zip")},
         headers=headers,
     )
@@ -51,7 +51,7 @@ async def test_audit_log_query_and_export(client):
     second.seek(0)
     upload_second = await client.post(
         "/api/v1/skills/upload",
-        data={"skill_id": skill_id},
+        data={"skill_uuid": skill_id},
         files={"file": ("skill.zip", second.read(), "application/zip")},
         headers=headers,
     )
@@ -60,7 +60,7 @@ async def test_audit_log_query_and_export(client):
     assert rollback.status_code == 200
     download = await client.post(
         "/api/v1/skills/download",
-        json={"skill_id": skill_id, "version": "1.0.0"},
+        json={"skill_uuid": skill_id, "version": "1.0.0"},
         headers=headers,
     )
     assert download.status_code == 200

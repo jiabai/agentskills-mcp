@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea"
 export default function NewSkillPage() {
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [skillId, setSkillId] = useState<string | null>(null)
+  const [skillUuid, setSkillUuid] = useState<string | null>(null)
   const [uploading, setUploading] = useState(false)
   const [files, setFiles] = useState<string[]>([])
   const [message, setMessage] = useState<string | null>(null)
@@ -23,18 +23,18 @@ export default function NewSkillPage() {
     event.preventDefault()
     setMessage(null)
     const skill = await api.createSkill({ name, description })
-    setSkillId(skill.id)
+    setSkillUuid(skill.id)
     setMessage("Skill 已创建，可以开始上传文件。")
   }
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
-    if (!file || !skillId) {
+    if (!file || !skillUuid) {
       return
     }
     setUploading(true)
     try {
-      const result = await api.uploadSkillFile(skillId, file)
+      const result = await api.uploadSkillFile(skillUuid, file)
       setFiles((prev) => [...prev, result.filename])
     } finally {
       setUploading(false)
@@ -99,7 +99,7 @@ export default function NewSkillPage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="file">选择文件</Label>
-              <Input id="file" type="file" onChange={handleUpload} disabled={!skillId || uploading} />
+              <Input id="file" type="file" onChange={handleUpload} disabled={!skillUuid || uploading} />
             </div>
             {uploading ? <p className="text-sm text-muted-foreground">正在上传...</p> : null}
             {files.length > 0 ? (

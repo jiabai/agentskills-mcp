@@ -169,8 +169,8 @@
 - [x] ZIP 上传（`/api/v1/skills/upload`，识别 `.zip`）
 - [x] frontmatter 解析（`SKILL.md`：name/description/version/dependencies）
 - [x] 版本归档目录（`_versions/{version}`）与当前版本覆盖
-- [x] 版本列表（`GET /api/v1/skills/{skill_id}/versions`）
-- [x] 版本回滚（`POST /api/v1/skills/{skill_id}/versions/{version}/rollback`）
+- [x] 版本列表（`GET /api/v1/skills/{skill_uuid}/versions`）
+- [x] 版本回滚（`POST /api/v1/skills/{skill_uuid}/versions/{version}/rollback`）
 - [x] 技能下架/启用（`deactivate/activate`）
 - [x] 下架缓存失效标记（`cache_revoked_at`）
 - [x] 依赖安装指引（客户端安装，`install-instructions`）
@@ -203,31 +203,31 @@
 
 3) **版本与标识规则**
 
-- `skill_id` 全局唯一且不可变，推荐使用小写字母、数字与短横线
-- `name` 可读名称允许变更，但不作为唯一标识
+- `skill_id` 为数据库 UUID（全局唯一且不可变）
+- `name` 为可读稳定标识（推荐小写字母、数字与短横线）
 - `version` 采用 SemVer（如 `1.2.0`），不允许回退式发布
 - 回滚仅影响当前版本指针，不删除历史版本
 
 4) **技能上传**
 
 - `POST /api/v1/skills/upload`
-  - 表单：`skill_id`（必填）、`file`（必填）、`metadata`（可选，JSON 字符串）
+  - 表单：`skill_uuid`（必填）、`file`（必填）、`metadata`（可选，JSON 字符串）
   - `.zip`：触发版本创建与解析；非 `.zip`：按单文件上传处理
   - 成功（zip）：返回 `version`、`current_version`、`dependencies`
 
 5) **版本列表与回滚**
 
-- `GET /api/v1/skills/{skill_id}/versions`
-- `POST /api/v1/skills/{skill_id}/versions/{version}/rollback`
+- `GET /api/v1/skills/{skill_uuid}/versions`
+- `POST /api/v1/skills/{skill_uuid}/versions/{version}/rollback`
   - 回滚后：当前版本目录会被目标版本文件覆盖
   - Skill 元数据：`current_version` 更新为回滚目标版本
 
 6) **下架与缓存失效（客户端安装/本地缓存模式）**
 
-- `POST /api/v1/skills/{skill_id}/deactivate`
+- `POST /api/v1/skills/{skill_uuid}/deactivate`
   - `is_active=false`
   - `cache_revoked_at=当前时间`
-- `POST /api/v1/skills/{skill_id}/activate`
+- `POST /api/v1/skills/{skill_uuid}/activate`
   - `is_active=true`
 - 客户端缓存校验建议：
   - 缓存条目保存 `cached_at`
@@ -236,12 +236,12 @@
 7) **依赖安装策略（C：客户端安装）**
 
 - 服务端只提供依赖清单与安装指引，不执行安装
-- `GET /api/v1/skills/{skill_id}/versions/{version}/install-instructions`
+- `GET /api/v1/skills/{skill_uuid}/versions/{version}/install-instructions`
   - 返回 `strategy=client`、`dependencies`、`requirements_text`、`commands`
 
 8) **版本差异对比**
 
-- `GET /api/v1/skills/{skill_id}/versions/diff?from={from_version}&to={to_version}`
+- `GET /api/v1/skills/{skill_uuid}/versions/diff?from={from_version}&to={to_version}`
   - 返回 `added` / `removed` / `modified`
   - `modified[].diff` 对小文本文件返回 unified diff；大文件或二进制文件可返回空 diff
 
@@ -459,7 +459,7 @@ decrypted = decrypt(
 ```typescript
 // 本地缓存结构
 {
-  "skill_id": "china-stock-analysis",
+  "skill_id": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0",
   "encrypted_code": "base64(encrypted_skill)",
   "checksum": "sha256:abc123...",
@@ -480,7 +480,7 @@ decrypted = decrypt(
   "enterprise_id": "acme-corp",
   "user_id": "zhangsan@company.com",
   "action": "skill.execute",
-  "resource": "skill://china-stock-analysis@1.2.0",
+  "resource": "skill://8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab@1.2.0",
   "ip_address": "192.168.1.100",
   "user_agent": "OpenClaw/1.0.0",
   "result": "success",
@@ -543,8 +543,8 @@ GET skill://list?enterprise_id=acme-corp
     "text": JSON.stringify({
       "skills": [
         {
-          "skill_id": "china-stock-analysis",
-          "name": "A 股价值投资分析",
+          "skill_id": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
+          "name": "china-stock-analysis",
           "version": "1.2.0",
           "description": "基于价值理论的 A 股分析工具",
           "author": "enterprise",
@@ -563,18 +563,18 @@ GET skill://list?enterprise_id=acme-corp
 
 ```typescript
 // MCP Resource URI
-skill://{skill_id}@{version}
+skill://{skill_uuid}@{version}
 
 // 请求
-GET skill://china-stock-analysis@1.2.0
+GET skill://8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab@1.2.0
 
 // 响应
 {
   "contents": [{
-    "uri": "skill://china-stock-analysis@1.2.0",
+    "uri": "skill://8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab@1.2.0",
     "mimeType": "application/json",
     "text": JSON.stringify({
-      "skill_id": "china-stock-analysis",
+      "skill_id": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
       "version": "1.2.0",
       "name": "A 股价值投资分析",
       "description": "...",
@@ -604,17 +604,17 @@ GET skill://china-stock-analysis@1.2.0
   "inputSchema": {
     "type": "object",
     "properties": {
-      "skill_id": { "type": "string", "description": "Skill ID" },
+      "skill_uuid": { "type": "string", "description": "Skill UUID" },
       "version": { "type": "string", "description": "Skill version (optional, default: latest)" },
       "parameters": { "type": "object", "description": "Skill parameters" }
     },
-    "required": ["skill_id"]
+    "required": ["skill_uuid"]
   }
 }
 
 // 调用示例
 {
-  "skill_id": "china-stock-analysis",
+  "skill_uuid": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0",
   "parameters": {
     "stock_code": "002594",
@@ -642,13 +642,13 @@ Authorization: Bearer {jwt_token}
 
 Request:
 {
-  "skill_id": "china-stock-analysis",
+  "skill_uuid": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0"
 }
 
 Response:
 {
-  "skill_id": "china-stock-analysis",
+  "skill_uuid": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0",
   "encrypted_code": "base64(...)",
   "checksum": "sha256:abc123...",
@@ -669,7 +669,7 @@ FormData:
 
 Response:
 {
-  "skill_id": "china-stock-analysis",
+  "skill_id": "8b3b0f59-72ce-4f5f-9d30-4f6ae4f0f9ab",
   "version": "1.2.0",
   "status": "uploaded",
   "created_at": "2026-03-04T19:30:00Z"

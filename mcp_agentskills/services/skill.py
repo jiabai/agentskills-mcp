@@ -390,7 +390,7 @@ class SkillService:
             checksum = self._checksum_payload(archive_bytes)
         expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
         return {
-            "skill_id": skill.id,
+            "skill_uuid": skill.id,
             "version": target_version,
             "encrypted_code": encrypted_code,
             "checksum": checksum,

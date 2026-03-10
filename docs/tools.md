@@ -309,7 +309,7 @@ python tests/test_run_shell_command_op.py <path/to/skills> <skill_name> <command
 ## Tool 6: skill_detail_resource
 
 <p align="left">
-  <em>Return MCP Resource payload for `skill://{id}@{version}`.</em>
+  <em>Return MCP Resource payload for `skill://{skill_uuid}@{version}`.</em>
 </p>
 
 ### Description
@@ -320,12 +320,12 @@ python tests/test_run_shell_command_op.py <path/to/skills> <skill_name> <command
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `skill_id` | string | Yes | - | Skill ID |
+| `skill_uuid` | string | Yes | - | Skill UUID |
 | `version` | string | No | 当前版本/最新版本 | 目标版本 |
 
 ### Returns
 
-`str`：JSON 字符串，`uri` 形如 `skill://{skill_id}@{version}`，`text` 为技能详情 JSON。
+`str`：JSON 字符串，`uri` 形如 `skill://{skill_uuid}@{version}`，`text` 为技能详情 JSON。
 
 ---
 
@@ -337,13 +337,13 @@ python tests/test_run_shell_command_op.py <path/to/skills> <skill_name> <command
 
 ### Description
 
-按 `skill_id` 与可选 `version` 执行技能。执行命令从目标版本 `SKILL.md` 的 `command` 或 `entrypoint` 推导，受命令白名单限制；输入参数通过 `SKILL_PARAMS` 注入环境变量。
+按 `skill_uuid` 与可选 `version` 执行技能。执行命令从目标版本 `SKILL.md` 的 `command` 或 `entrypoint` 推导，受命令白名单限制；输入参数通过 `SKILL_PARAMS` 注入环境变量。
 
 ### Input Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `skill_id` | string | Yes | - | Skill ID |
+| `skill_uuid` | string | Yes | - | Skill UUID |
 | `version` | string | No | 当前版本/最新版本 | 目标版本 |
 | `parameters` | object | No | `{}` | 技能执行参数 |
 

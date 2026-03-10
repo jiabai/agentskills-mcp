@@ -116,9 +116,9 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
         return ToolCall(
             **{
                 "name": "skill_detail_resource",
-                "description": "Return MCP skill://{id}@{version} resource payload.",
+                "description": "Return MCP skill://{skill_uuid}@{version} resource payload.",
                 "input_schema": {
-                    "skill_id": {"type": "string", "description": "Skill ID", "required": True},
+                    "skill_uuid": {"type": "string", "description": "Skill UUID", "required": True},
                     "version": {"type": "string", "description": "Skill version", "required": False},
                 },
             },
@@ -136,7 +136,7 @@ class SkillDetailResourceOp(BaseAsyncToolOp):
             if not user_id:
                 self._set_output(tool_error_payload("Unauthorized", "UNAUTHORIZED"))
                 return
-            skill_id = self.input_dict["skill_id"]
+            skill_id = self.input_dict["skill_uuid"]
             version_input = self.input_dict.get("version")
             async for session in db_session.get_async_session():
                 skill_repo = SkillRepository(session)

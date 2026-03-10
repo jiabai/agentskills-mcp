@@ -85,7 +85,7 @@ async def create_skill(
             payload.name,
             payload.description,
             payload.tags,
-            visibility=payload.visibility,
+            visibility=payload.visible,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
@@ -128,6 +128,9 @@ async def update_skill(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
     service = SkillService(SkillRepository(session))
     fields = payload.model_dump(exclude_unset=True)
+    visible = fields.pop("visible", None)
+    if visible is not None:
+        fields["visibility"] = visible
     try:
         skill = await service.update_skill(current_user, skill_id, **fields)
     except ValueError as exc:

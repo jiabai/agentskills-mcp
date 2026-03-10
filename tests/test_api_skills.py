@@ -50,6 +50,46 @@ async def test_skill_lifecycle(client, tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_skill_visible_field_alias(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "visible@example.com", "purpose": "register"},
+    )
+    await client.post(
+        "/api/v1/auth/register",
+        json={"email": "visible@example.com", "username": "visible", "code": "123456"},
+    )
+    await client.post(
+        "/api/v1/auth/verification-code",
+        json={"email": "visible@example.com", "purpose": "login"},
+    )
+    login = await client.post(
+        "/api/v1/auth/login",
+        json={"email": "visible@example.com", "code": "123456"},
+    )
+    access = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "visible-skill", "description": "desc", "visible": "private"},
+        headers=headers,
+    )
+    assert created.status_code == 201
+    created_payload = created.json()
+    assert created_payload["visible"] == "private"
+    assert "visibility" not in created_payload
+    skill_id = created_payload["id"]
+    updated = await client.put(
+        f"/api/v1/skills/{skill_id}",
+        json={"visible": "team"},
+        headers=headers,
+    )
+    assert updated.status_code == 200
+    assert updated.json()["visible"] == "team"
+
+
+@pytest.mark.asyncio
 async def test_skill_name_max_length(client):
     await client.post(
         "/api/v1/auth/verification-code",

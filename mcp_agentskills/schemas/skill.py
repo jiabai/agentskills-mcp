@@ -1,20 +1,28 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field
 
 
 class SkillCreate(BaseModel):
     name: str = Field(min_length=1, max_length=100)
     description: str = Field(default="", max_length=500)
     tags: list[str] = Field(default_factory=list, max_length=50)
-    visibility: str = Field(default="private", max_length=20)
+    visible: str = Field(
+        default="private",
+        max_length=20,
+        validation_alias=AliasChoices("visible", "visibility"),
+    )
 
 
 class SkillUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=100)
     description: str | None = Field(default=None, max_length=500)
     tags: list[str] | None = Field(default=None, max_length=50)
-    visibility: str | None = Field(default=None, max_length=20)
+    visible: str | None = Field(
+        default=None,
+        max_length=20,
+        validation_alias=AliasChoices("visible", "visibility"),
+    )
 
 
 class SkillResponse(BaseModel):
@@ -22,7 +30,7 @@ class SkillResponse(BaseModel):
     name: str
     description: str
     tags: list[str]
-    visibility: str
+    visible: str = Field(alias="visibility", serialization_alias="visible")
     enterprise_id: str | None
     team_id: str | None
     skill_dir: str
@@ -32,7 +40,7 @@ class SkillResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    model_config = {"from_attributes": True}
+    model_config = {"from_attributes": True, "populate_by_name": True}
 
 
 class SkillListResponse(BaseModel):

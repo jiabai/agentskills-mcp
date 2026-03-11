@@ -13,13 +13,13 @@
 - 适用：本地单用户、CLI 集成
 - 入口：`mcp_agentskills.main`
 
-## 公网版与私有化版
+## 部署能力开关建议（企业私有化）
 
-部署形态与功能开关建议见 [public-vs-private-deployment-matrix.md](./public-vs-private-deployment-matrix.md)。
+企业私有化部署的能力开关建议以本文与 `project-spec.md` 第 1.5 节为准。
 
 ## 术语与开关口径
 
-- 本文中的“公网版 / 私有化版”与 `project-spec.md`、`public-vs-private-deployment-matrix.md` 的定义保持一致
+- 本文中的部署能力口径与 `project-spec.md` 保持一致
 - 可见性术语统一使用“企业级 / 团队级 / 个人级”，对应配置与接口字段口径 `visible`
 - 可见性示例值统一使用 `enterprise | team | private`
 - 权限术语统一使用 RBAC 权限点（`resource.action`），如 `skill.download`、`audit.read`
@@ -133,7 +133,7 @@ LDAP_ROLE_ATTR=role
 LDAP_STATUS_ATTR=status
 ```
 
-### 私有化版最小能力开关示例
+### 企业私有化最小能力开关示例
 
 ```bash
 ENABLE_PUBLIC_SIGNUP=false

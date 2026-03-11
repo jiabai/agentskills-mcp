@@ -267,7 +267,7 @@
 
 | ID | 任务 | 描述 | 依赖 | 状态 |
 |----|------|------|------|------|
-| T7.3.1 | MCP 资源接口 | `skill://list` 与 `skill://{id}@{version}` | T7.2.2 | 🔵 |
+| T7.3.1 | MCP 资源接口 | `skill://list` 与 `skill://{id}@{version}` | T7.2.2 | ✅ |
 | T7.3.2 | 执行工具契约 | `execute_skill` 工具与权限校验 | T7.3.1 | ✅ |
 | T7.3.3 | 技能下载接口 | `skills/download` 加密传输 | T7.3.2 | ✅ |
 
@@ -407,7 +407,7 @@ Phase 6 (测试)
      - `commands`：面向执行器的推荐命令（如 `pip install -r requirements.txt` / `npm ci`）
      - `manifests`：依赖清单原文或 JSON（用于执行器生成环境）
 6. **客户端/执行器对接约定（C 端实现）**
-   - 按 `dependency_spec` 选择隔离环境策略（venv/uv/conda/node_modules/container）
+   - 按 `dependency_spec` 选择隔离环境策略（venv/uv/conda/node_modules）
    - 以 `skill_id@version` 为粒度缓存环境；版本变更或策略变更需重建
 7. **验收与测试（改代码时的检查项）**
    - ZIP 上传：不同生态依赖声明能被解析并持久化到 SkillVersion

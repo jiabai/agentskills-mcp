@@ -105,12 +105,6 @@
 > - 测试时应避免使用 PostgreSQL 特有特性，或使用条件判断兼容两种数据库
 > - 如果使用 PostgreSQL 特有特性（如 `uuid-ossp` 扩展），建议在测试环境中使用 `pytest-postgresql` 等工具启动真实 PostgreSQL 实例
 
-### 1.5 工程质量（Lint/Typecheck）
-
-- [x] `python -m ruff check .` 通过（无历史告警残留）
-- [x] `python -m mypy mcp_agentskills` 通过（类型检查无错误）
-- [x] CI 已纳入后端 `ruff` 与 `mypy` 强制门禁（见 `.github/workflows/ci.yml`）
-
 ---
 
 ## 2. 数据库模型检查
@@ -275,8 +269,8 @@
 ### 5.3 Skill Repository
 
 - [x] `mcp_agentskills/repositories/skill.py` 文件存在
-- [x] `get_by_user_and_name()` 方法
-- [x] `get_multi_by_user()` 方法（分页）
+- [x] `get_by_name()` 方法
+- [x] `list_by_user()` 方法（分页）
 
 ### 5.4 Token Repository
 
@@ -443,11 +437,11 @@
 ### 7.5 MCP 接口
 
 - [x] POST `/mcp`
-  - [x] 需要 API Token 认证
+  - [x] 需要 Bearer 认证（优先 API Token，兼容 JWT Access Token）
   - [x] 支持 MCP 协议
   - [x] 用户隔离正确
 - [x] GET `/sse`
-  - [x] 需要 API Token 认证
+  - [x] 需要 Bearer 认证（优先 API Token，兼容 JWT Access Token）
   - [x] SSE 连接正确
   - [x] 用户隔离正确
 

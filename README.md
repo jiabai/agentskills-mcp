@@ -87,7 +87,6 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 - Technical spec: [docs/project-spec.md](docs/project-spec.md)
 - Deployment guide: [docs/deployment.md](docs/deployment.md)
 - MCP tools: [docs/tools.md](docs/tools.md)
-- Public vs private matrix: [docs/public-vs-private-deployment-matrix.md](docs/public-vs-private-deployment-matrix.md)
 
 ## 🤝 Contributing
 

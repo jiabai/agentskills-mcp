@@ -97,7 +97,6 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 - 技术规范：[docs/project-spec.md](docs/project-spec.md)
 - 部署指南：[docs/deployment.md](docs/deployment.md)
 - MCP 工具说明：[docs/tools.md](docs/tools.md)
-- 公网版 vs 私有化配置矩阵：[docs/public-vs-private-deployment-matrix.md](docs/public-vs-private-deployment-matrix.md)
 
 ## 🤝 贡献指南
 

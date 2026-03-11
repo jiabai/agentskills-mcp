@@ -45,7 +45,6 @@
 | [checklist.md](./checklist.md) | 验证检查清单 |
 | [tools.md](./tools.md) | MCP 工具文档 |
 | [deployment.md](./deployment.md) | 部署说明与运维 |
-| [public-vs-private-deployment-matrix.md](./public-vs-private-deployment-matrix.md) | 公网版与私有化配置矩阵 |
 
 ### 命令示例说明
 
@@ -53,8 +52,8 @@
 
 ### 文档基线与适用范围
 
-- 当前仓库的实现与验收以以下文档为准：`project-spec.md`、`task_list.md`、`checklist.md`、`deployment.md`、`tools.md`、`public-vs-private-deployment-matrix.md`
-- `enterprise-skill-cloud-requirements.md` 与 `enterprise-skill-cloud-plan-p0/p1/p2/p3.md` 为蓝图或已跳过计划，不作为当前仓库落地验收依据
+- 当前仓库的实现与验收以以下文档为准：`project-spec.md`、`task_list.md`、`checklist.md`、`deployment.md`、`tools.md`
+- 历史蓝图与阶段计划文档仅作背景参考，不作为当前仓库落地验收依据
 - 文档冲突时采用统一优先级：代码实现与测试结果 > `project-spec.md` > `checklist.md` / `task_list.md` > 其他说明文档
 - `checklist.md` 勾选建议遵循“证据优先”：将 `- [ ]` 改为 `- [x]` 时记录日期、验证命令与结果摘要；无证据保持 `- [ ]` 并标注“（需确认）”
 
@@ -168,7 +167,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 - 统一校验：API 与 MCP 入口共用同一权限判定逻辑
 
 **MCP/REST 接口契约**
-- `skill://list`：返回可见技能列表（含 `skill_id`〈UUID〉、`name`〈可读稳定标识〉、`version`、`visible`、`updated_at`）
+- `skill://list`：返回可见技能列表（最小字段含 `skill_id`〈UUID〉、`name`〈可读稳定标识〉、`version`、`visible`、`updated_at`；实现中还返回 `description`、`author`、`created_at`、`tags`）
 - `skill://{id}@{version}`：返回技能元数据、依赖与参数定义
 - `execute_skill`：按版本执行技能，权限按可见性与 RBAC 双重校验
 - `skills/download`：仅对授权用户提供，默认加密传输
@@ -211,13 +210,12 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 - 第一优先级：代码实现与可执行测试结果
 - 第二优先级：本文件（`project-spec.md`）中的约束与契约
 - 第三优先级：`checklist.md` 与 `task_list.md` 的执行记录
-- 范围外参考：`enterprise-skill-cloud-requirements.md` 与 P0-P3 计划文档（仅背景，不参与验收判定）
+- 范围外参考：历史蓝图与阶段计划文档（仅背景，不参与验收判定）
 
 **当前缺口优先级（建议）**
 
 | 优先级 | 事项 | 目标 | 完成判据 |
 |------|------|------|---------|
-| P0 | `skill://list.visible` 对齐 | 消除 API/MCP 可见性不一致 | 同一用户同一技能在 API 与 MCP 的可见性结果一致，覆盖企业/团队/个人三层用例 |
 | P0 | 审计采集全覆盖 | 满足合规审计完整性 | 认证、权限变更、技能上传/下架/回滚/执行/下载均产生日志并可按条件检索 |
 | P1 | 自动递增策略配置化 | 提升版本治理可控性 | 支持按环境选择策略（至少 patch/minor），并有冲突处理回归测试 |
 
@@ -312,6 +310,10 @@ class User(Base):
     hashed_password: Mapped[str] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(default=True)
     is_superuser: Mapped[bool] = mapped_column(default=False)
+    enterprise_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    team_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    role: Mapped[str] = mapped_column(String(50), default="member")
+    status: Mapped[str] = mapped_column(String(32), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -335,7 +337,7 @@ class User(Base):
 ```python
 from datetime import datetime
 from typing import List
-from sqlalchemy import String, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import JSON, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
 from mcp_agentskills.models.base import generate_uuid
@@ -347,6 +349,10 @@ class Skill(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"))
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(500), default="")
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list)
+    visibility: Mapped[str] = mapped_column(String(20), default="private")
+    enterprise_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    team_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     skill_dir: Mapped[str] = mapped_column(String(500))
     current_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     is_active: Mapped[bool] = mapped_column(default=True)
@@ -383,12 +389,16 @@ class SkillVersion(Base):
     version: Mapped[str] = mapped_column(String(50))
     description: Mapped[str] = mapped_column(String(500), default="")
     dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)
-    metadata: Mapped[dict] = mapped_column(JSON, default=dict)
+    dependency_spec: Mapped[dict] = mapped_column(JSON, default=dict)
+    dependency_spec_version: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    metadata_json: Mapped[dict] = mapped_column("metadata", JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     skill: Mapped["Skill"] = relationship("Skill")
 ```
+
+> **API 字段口径说明**：SkillVersion 内部属性使用 `metadata_json`，数据库列名为 `metadata`；对外 Schema 仍保持字段名 `metadata`（通过别名与序列化配置统一口径）。
 
 ### 3.3 APIToken 模型
 
@@ -634,12 +644,12 @@ class DeprecationNotifier:
 
 #### 登录模式与开关矩阵
 
-| 登录模式 | 入口 | 必要开关 | 典型部署 |
+| 登录模式 | 入口 | 必要开关 | 企业私有化建议 |
 |------|------|---------|---------|
-| 邮箱验证码登录 | `/verification-code` + `/login` | `ENABLE_EMAIL_OTP_LOGIN=true` | 公网版默认 |
-| 公共注册 | `/verification-code` + `/register` | `ENABLE_PUBLIC_SIGNUP=true` | 公网版可选 |
-| SSO 登录 | `/sso/login` | `ENABLE_SSO=true` | 私有化版默认 |
-| LDAP 登录 | `/ldap/login` | `ENABLE_LDAP=true` | 私有化版默认 |
+| 邮箱验证码登录 | `/verification-code` + `/login` | `ENABLE_EMAIL_OTP_LOGIN=true` | 按需开启（常与企业邮箱体系配套） |
+| 公共注册 | `/verification-code` + `/register` | `ENABLE_PUBLIC_SIGNUP=true` | 默认关闭（仅在受控场景开启） |
+| SSO 登录 | `/sso/login` | `ENABLE_SSO=true` | 推荐开启 |
+| LDAP 登录 | `/ldap/login` | `ENABLE_LDAP=true` | 推荐开启 |
 
 > 设计约束：同一环境可并存多种入口，但应在部署层明确“主入口”，避免用户端出现并行身份体系导致的账户归属混乱。
 
@@ -953,7 +963,7 @@ class DeprecationNotifier:
 
 | 能力 | 形式 | 名称/URI | 说明 |
 |------|------|----------|------|
-| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（支持可见性过滤；当前 `visible` 字段存在已知偏差，见 1.5 节“当前实现边界”） |
+| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（支持可见性过滤；`visible` 字段已标准化并有测试覆盖） |
 | 技能详情 | Tool（返回 Resource Payload） | `skill_detail_resource` → `skill://{id}@{version}` | 返回技能元数据、依赖与参数定义（来自版本归档的 `SKILL.md`） |
 | 技能执行 | Tool | `execute_skill` | 根据 `SKILL.md` 中的 `command` 或 `entrypoint` 执行技能（受命令白名单限制） |
 | 技能元数据扫描 | Tool | `load_skill_metadata` | 扫描 Skill 目录读取 `SKILL.md` frontmatter |
@@ -2156,24 +2166,15 @@ def get_safe_skill_path(base_dir: Path, user_id: str, skill_name: str, file_path
         return None
 
     # 验证 skill_name
-    is_valid, _ = validate_file_path(skill_name)
+    is_valid, _ = validate_skill_name(skill_name)
     if not is_valid:
         return None
 
-    # 构建完整路径
-    full_path = base_dir / user_id / skill_name / file_path
-
-    # 解析并验证最终路径仍在允许的目录内
-    try:
-        full_path = full_path.resolve()
-        base_path = (base_dir / user_id).resolve()
-
-        if not str(full_path).startswith(str(base_path)):
-            return None  # 路径逃逸
-
-        return full_path
-    except Exception:
+    base_path = (base_dir / user_id / skill_name).resolve()
+    full_path = (base_path / file_path).resolve()
+    if not full_path.is_relative_to(base_path):
         return None
+    return full_path
 
 
 def validate_filename(filename: str) -> tuple[bool, str]:
@@ -2260,16 +2261,17 @@ async def upload_skill_file(
 
 **推荐策略**:
 - 命令白名单与危险模式拦截（生产环境必需）
-- 资源限制（CPU/内存/文件大小）
-- 沙箱隔离（Docker 或微虚拟机）
+- 目录配额与并发限制（可选）
+- 环境变量收缩（可选）
+- 网络关键字拦截（可选）
 
 | 环境 | 推荐方案 | 说明 |
 |------|---------|------|
 | 开发环境 | 无限制 | 方便调试 |
 | 测试环境 | 命令白名单 | 基本安全 |
-| 生产环境 | 白名单 + 资源限制 + 沙箱 | 完整安全 |
+| 生产环境 | 白名单 + 目录配额/并发 + 环境变量收缩 + 网络关键字拦截 | 轻量安全 |
 
-当前仓库默认启用“命令白名单 + 危险模式拦截”，且不区分开发/测试/生产环境。`COMMAND_SECURITY_LEVEL`、`COMMAND_TIMEOUT`、`COMMAND_MAX_*` 等配置项暂未提供。
+当前仓库默认启用“命令白名单 + 危险模式拦截”，可通过 `ENABLE_RESOURCE_QUOTA`、`ENABLE_SANDBOX_EXECUTION`、`ENABLE_NETWORK_EGRESS_CONTROL` 启用目录配额、环境变量收缩、网络关键字拦截；且不区分开发/测试/生产环境。`COMMAND_SECURITY_LEVEL`、`COMMAND_TIMEOUT`、`COMMAND_MAX_*` 等配置项暂未提供。
 
 ---
 

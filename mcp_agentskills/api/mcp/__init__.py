@@ -143,7 +143,7 @@ async def ensure_mcp_initialized() -> None:
             from flowllm.core.flow import BaseToolFlow
             from flowllm.core.service.mcp_service import MCPService
 
-            from mcp_agentskills.main import AgentSkillsMcpApp
+            from mcp_agentskills.core.app import AgentSkillsMcpApp
         except Exception as exc:
             _init_error = exc
             fallback = _build_fallback_app()

@@ -55,14 +55,14 @@
 - 当前仓库的实现与验收以以下文档为准：`project-spec.md`、`task_list.md`、`checklist.md`、`deployment.md`、`tools.md`
 - 历史蓝图与阶段计划文档仅作背景参考，不作为当前仓库落地验收依据
 - 文档冲突时采用统一优先级：代码实现与测试结果 > `project-spec.md` > `checklist.md` / `task_list.md` > 其他说明文档
-- `checklist.md` 勾选建议遵循“证据优先”：将 `- [ ]` 改为 `- [x]` 时记录日期、验证命令与结果摘要；无证据保持 `- [ ]` 并标注“（需确认）”
+- 更新 `checklist.md` 时建议遵循“证据优先”原则：在将状态标记为完成（由 `- [ ]` 改为 `- [x]`）时，应同时记录验证日期、验证命令与结果摘要；若缺乏验证证据，应保持未完成状态并标注“（需确认）”
 
 ### 术语与状态统一口径
 
 为避免跨文档语义漂移，本文档作为术语与状态口径的统一来源：
 
 - **可见性层级**：统一使用“企业级 / 团队级 / 个人级”（英文字段对应 `enterprise/team/private`）
-- **权限判定**：统一使用“RBAC 权限点 + 可见性规则”双重约束，权限点命名采用 `resource.action`（如 `skill.download`、`audit.read`）
+- **权限判定**：使用 RBAC 权限点与可见性规则双重控制。权限点采用`resource.action`（资源.操作）格式命名（如 `skill.download` 表示下载技能，`audit.read` 表示读取审计日志）
 - **接口契约字段**：`skill://list` 与 REST 返回中的可见性字段统一使用 `visible`
 - **状态标签**：
   - ✅ 已实现：代码与测试覆盖完整，可进入验收通过
@@ -140,6 +140,49 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 | FastAPI HTTP/SSE 传输模式 | 新增认证，支持用户隔离 |
 | 现有配置文件 | 扩展而非替换 |
 | 跨平台路径 | 使用 `pathlib.Path` 自动处理 |
+
+#### 1.4.1 三种传输模式的区分机制
+
+系统支持三种传输模式，通过不同的启动入口、认证机制和用户上下文进行区分：
+
+| 模式 | 启动方式 | 代码入口 | 认证 | 用户隔离 | Skill 路径 |
+|------|---------|---------|------|---------|-----------|
+| **stdio** | `python -m mcp_agentskills.main`<br>`agentskills-mcp` | [main.py](../mcp_agentskills/main.py) | ❌ 无 | ❌ | `{skill_dir}/{skill_name}/SKILL.md` |
+| **单用户 SSE** | `agentskills-mcp config=default mcp.transport=sse` | [main.py](../mcp_agentskills/main.py) | ❌ 无 | ❌ | `{skill_dir}/{skill_name}/SKILL.md` |
+| **HTTP API** | `uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000` | [api_app.py](../mcp_agentskills/api_app.py) | ✅ API Token | ✅ | `{skill_dir}/{user_id}/{skill_name}/SKILL.md` |
+
+**核心区分逻辑：**
+
+1. **用户上下文判断**
+   - 通过 `get_current_user_id()` 获取当前请求的用户 ID
+   - 返回 `None` → stdio/SSE 单用户模式（使用全局目录）
+   - 返回有效值 → HTTP API 多用户模式（使用用户私有目录）
+
+   ```python
+   # 示例：load_skill_op.py
+   user_id = get_current_user_id()
+   skill_path = (
+       skill_dir / user_id / skill_name / "SKILL.md" 
+       if user_id 
+       else skill_dir / skill_name / "SKILL.md"
+   )
+   ```
+
+2. **HTTP API 认证流程**
+   - 通过 `McpAppProxy` 代理所有 MCP 请求
+   - 在 [`McpAppProxy.__call__`](../mcp_agentskills/api/mcp/__init__.py#L183) 中调用 `_authorize_mcp_request` 进行认证
+   - 认证成功后通过 `set_current_user_id()` 设置用户上下文
+   - 请求结束后自动清理用户上下文
+
+3. **特殊处理**
+   - `skill://list` 资源在无用户时直接返回空列表（向后兼容）
+   - stdio/SSE 模式保持现有 MCP 工具核心逻辑不变
+   - HTTP API 模式强制要求认证，确保多用户环境下的数据隔离
+
+**技术实现：**
+- 用户上下文使用 `contextvars.ContextVar` 实现请求级别隔离
+- 认证机制基于 Bearer Token 和 JWT
+- 路径构建通过 `pathlib.Path` 自动处理跨平台兼容性
 
 ### 1.5 企业私有云 P0 落地范围（说明性规范）
 

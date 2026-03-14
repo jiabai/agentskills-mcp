@@ -80,6 +80,12 @@ class Settings(BaseSettings):
     ENABLE_NETWORK_EGRESS_CONTROL: bool = False
     ENABLE_RATE_LIMIT: bool = True
     ENABLE_METRICS: bool = True
+    ENABLE_DEPRECATION_HEADERS: bool = True
+
+    DEPRECATED_ENDPOINTS: dict = {}
+    DEPRECATED_VERSIONS: set = set()
+    DEPRECATED_VERSION_SUNSET_DATE: str = ""
+
     DEFAULT_SKILL_VISIBILITY: str = "private"
     DEFAULT_ROLE: str = "member"
     DEFAULT_USER_STATUS: str = "active"
@@ -140,6 +146,32 @@ class Settings(BaseSettings):
                 if isinstance(parsed, dict):
                     return parsed
         return v
+
+    @field_validator("DEPRECATED_ENDPOINTS", mode="before")
+    @classmethod
+    def parse_deprecated_endpoints(cls, v):
+        if isinstance(v, str):
+            raw = v.strip()
+            if raw:
+                import json
+
+                parsed = json.loads(raw)
+                if isinstance(parsed, dict):
+                    return parsed
+        return v if isinstance(v, dict) else {}
+
+    @field_validator("DEPRECATED_VERSIONS", mode="before")
+    @classmethod
+    def parse_deprecated_versions(cls, v):
+        if isinstance(v, str):
+            raw = v.strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                import json
+
+                parsed = json.loads(raw)
+                return set(parsed) if isinstance(parsed, list) else set()
+            return set(item.strip() for item in raw.split(",") if item.strip())
+        return set(v) if isinstance(v, (list, set)) else set()
 
     @field_validator("SECRET_KEY")
     @classmethod

@@ -23,3 +23,9 @@ class Skill(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     cache_revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     user = relationship("User", back_populates="skills")
+    versions = relationship(
+        "SkillVersion",
+        back_populates="skill",
+        cascade="all, delete-orphan",
+        order_by="SkillVersion.created_at.desc()",
+    )

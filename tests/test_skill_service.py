@@ -49,3 +49,36 @@ async def test_rename_skill_updates_directory(async_session, tmp_path):
         assert not old_path.exists()
     finally:
         settings.SKILL_STORAGE_PATH = original_path
+
+
+@pytest.mark.asyncio
+async def test_delete_skill_cascades_to_versions(async_session, tmp_path, monkeypatch):
+    from mcp_agentskills.repositories.skill_version import SkillVersionRepository
+    from mcp_agentskills.models.skill_version import SkillVersion
+
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    user_repo = UserRepository(async_session)
+    skill_repo = SkillRepository(async_session)
+    version_repo = SkillVersionRepository(async_session)
+    skill_service = SkillService(skill_repo)
+
+    user = await user_repo.create(email="cascade@example.com", username="usercascade", password="pass1234")
+    skill = await skill_service.create_skill(user, name="skill_with_version", description="desc")
+
+    version = await version_repo.create_version(
+        skill_id=skill.id,
+        version="1.0.0",
+        description="first version",
+        dependencies=[],
+        dependency_spec={},
+        dependency_spec_version=None,
+        metadata={},
+    )
+
+    all_versions_before = await version_repo.list_by_skill(skill.id)
+    assert len(all_versions_before) == 1
+
+    await skill_service.delete_skill(user, skill.id)
+
+    all_versions_after = await version_repo.list_by_skill(skill.id)
+    assert len(all_versions_after) == 0

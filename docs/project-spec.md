@@ -187,7 +187,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 ### 1.5 企业私有云 P0 落地范围（说明性规范）
 
 > 本节将企业私有云 P0 需求并入项目说明文档，作为实现与验收的统一基线；如与实际代码实现不一致，以代码为准。
-> 维护口径：企业私有云能力状态、差异判断与落地优先级统一维护在本文件（不再维护独立差异清单）。
+> 维护口径：企业私有云能力状态、差异判断与落地优先级统一维护在本文件。
 
 #### 范围与目标
 
@@ -217,8 +217,35 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 
 **审计日志**
 - 采集点：认证、权限变更、技能上传/下架/回滚/执行/下载、导出
-- 核心字段：`id`、`actor_id`、`action`、`target`、`result`、`timestamp`、`ip`、`user_agent`、`metadata`
+- 核心字段：`id`、`actor_id`、`action`、`target`、`result`、`timestamp`、`ip`、`user_agent`、`details`
 - 查询导出：支持按用户/时间/操作过滤，导出 CSV/JSON
+
+**审计采集点覆盖详情**
+
+| 类别 | Action | 状态 | 代码位置（参考） |
+|------|--------|------|----------|
+| **认证** | `auth.verification_code.send` | ✅ 已覆盖 | api/v1/auth.py:60 |
+| | `auth.register` | ✅ 已覆盖 | api/v1/auth.py:95 |
+| | `auth.login` | ✅ 已覆盖 | api/v1/auth.py:128 |
+| | `auth.login.failed` | ✅ 已覆盖 | api/v1/auth.py:114 |
+| | `auth.refresh` | ✅ 已覆盖 | api/v1/auth.py:157 |
+| | `auth.refresh.failed` | ✅ 已覆盖 | api/v1/auth.py:145 |
+| | `auth.sso.login` | ✅ 已覆盖 | api/v1/auth.py:175 |
+| | `auth.ldap.login` | ✅ 已覆盖 | api/v1/auth.py:193 |
+| **技能** | `skill.create` | ✅ 已覆盖 | api/v1/skills.py:94 |
+| | `skill.upload` | ✅ 已覆盖 | api/v1/skills.py:176, 190 |
+| | `skill.download` | ✅ 已覆盖 | api/v1/skills.py:220 |
+| | `skill.deactivate` | ✅ 已覆盖 | api/v1/skills.py:244 |
+| | `skill.activate` | ✅ 已覆盖 | api/v1/skills.py:268 |
+| | `skill.rollback` | ✅ 已覆盖 | api/v1/skills.py:348 |
+| | `skill.execute` | ✅ 已覆盖 | core/tools/execute_skill_op.py:184 |
+| | `skill.update` | ❌ 未覆盖 | api/v1/skills.py:113-126 |
+| | `skill.delete` | ❌ 未覆盖 | api/v1/skills.py:129-139 |
+| **用户** | `user.identity.update` | ✅ 已覆盖 | api/v1/users.py:123 |
+| | `user.password.change` | ❌ 未覆盖 | api/v1/users.py:53-62 |
+| | `user.delete` | ❌ 未覆盖 | api/v1/users.py:65-75 |
+| **令牌** | `token.create` | ❌ 未覆盖 | api/v1/tokens.py:38-47 |
+| | `token.delete/revoke` | ❌ 未覆盖 | api/v1/tokens.py:50-59 |
 
 **版本自动递增**
 - 默认策略：SemVer patch 递增（可通过 `SKILL_VERSION_BUMP_STRATEGY` 配置 `patch/minor`）
@@ -227,9 +254,27 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 #### 当前实现边界（截至 2026-03）
 
 - 已实现：`skill_list_resource` 的 `visible` 字段已与真实可见性对齐，并有测试覆盖。
-- 部分实现：审计采集点已覆盖核心链路，但未达到“认证/权限/技能操作全覆盖”。
+- 部分实现：审计采集点已覆盖核心链路（认证、技能创建/上传/下载/激活/下架/回滚/执行），但缺少 `skill.update`、`skill.delete`、`token.create/revoke` 等操作审计。
 - 已实现：版本自动递增策略支持 `patch/minor` 配置并包含冲突处理。
-- 未实现：MFA、WORM 审计、客户端缓存过期清理与离线降级、技能主文件对象存储化。
+- 已实现：客户端缓存过期清理（`SKILL_CACHE_TTL_SECONDS`）与离线降级（`ENABLE_CACHE_OFFLINE_FALLBACK`），并有测试覆盖。
+- 部分实现：技能归档文件支持 S3 对象存储，但技能主文件（SKILL.md 等）仍为本地存储。
+- 未实现：MFA、WORM 审计。
+
+**未实现功能详情**
+
+| 功能 | 状态 | 说明 | 相关配置/代码 |
+|------|------|------|---------------|
+| **MFA（多因素认证）** | ⬜ 未实现 | 代码库中无 MFA/2FA 相关实现，无 TOTP、短信验证码等二次认证机制 | - |
+| **WORM 审计** | ⬜ 未实现 | 审计日志无不可变保护机制，支持删除和修改，不满足合规要求 | models/audit_log.py |
+| **技能主文件对象存储** | 🔵 部分实现 | 技能归档文件（.zip）支持 S3 存储，但 SKILL.md 等主文件仍为本地存储 | core/utils/skill_archive.py |
+
+**已实现但文档曾标记为未实现的功能**
+
+| 功能 | 状态 | 说明 | 相关配置 |
+|------|------|------|----------|
+| **客户端缓存过期清理** | ✅ 已实现 | 通过 `SKILL_CACHE_TTL_SECONDS` 配置 TTL，过期自动清理 | settings.py:37, skill_archive.py:44-54 |
+| **离线降级** | ✅ 已实现 | S3 不可用时自动回退到本地缓存，通过 `ENABLE_CACHE_OFFLINE_FALLBACK` 控制 | settings.py:77, skill_archive.py:141 |
+| **测试覆盖** | ✅ 已实现 | 有专门测试用例验证缓存过期清理和离线降级 | tests/test_skill_archive_storage.py:53, 73 |
 
 #### 差距闭环与验收门槛
 
@@ -284,7 +329,8 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
                               │
 ┌─────────────────────────────────────────────────────────────┐
 │                    Service Layer                             │
-│  AuthService | UserService | SkillService | MCPService      │
+│  AuthService | UserService | SkillService | AuditService    │
+│  TokenService | VerificationCodeService | MCPService(FlowLLM)│
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
@@ -294,7 +340,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
                               │
 ┌─────────────────────────────────────────────────────────────┐
 │                    Storage Layer                             │
-│  PostgreSQL (Metadata) + File System (Skill Files)          │
+│  PostgreSQL (Metadata) + File System/S3 (Skill Files)       │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -305,19 +351,40 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 ├── {user_id_1}/
 │   ├── pdf/
 │   │   ├── SKILL.md
-│   │   └── reference.md
+│   │   ├── reference.md
+│   │   └── _versions/              # 历史版本目录
+│   │       ├── v1.0.0/
+│   │       └── v1.1.0/
 │   └── xlsx/
-│       └── SKILL.md
+│       ├── SKILL.md
+│       └── _versions/
 ├── {user_id_2}/
 │   └── pdf/
-│       └── SKILL.md
+│       ├── SKILL.md
+│       └── _versions/
+├── _archives/                      # 归档存储目录
+│   └── {user_id}/
+│       └── {skill_name}/
+│           ├── v1.0.0.zip
+│           └── v1.1.0.zip
+├── _local_cache/                   # 本地缓存目录
+│   └── {user_id}/
+│       └── {skill_name}/
+│           └── {version}.cache
 └── ...
 ```
+
+| 目录 | 说明 |
+|------|------|
+| `{user_id}/{skill_name}/` | 用户私有 Skill 目录，存放 SKILL.md 及相关文件 |
+| `{user_id}/{skill_name}/_versions/` | Skill 历史版本目录，每个版本一个子目录 |
+| `_archives/{user_id}/{skill_name}/` | 归档存储，每个版本打包为 `.zip` 文件 |
+| `_local_cache/{user_id}/{skill_name}/` | 本地缓存，用于加速 Skill 加载 |
 
 > **路径风格说明**: 文档中的路径示例使用 Linux/POSIX 风格（正斜杠 `/`）。在 Windows 环境下开发时：
 > - 配置文件中的路径可使用正斜杠或反斜杠
 > - Python 的 `pathlib.Path` 会自动处理跨平台路径
-> - 环境变量 `SKILL_STORAGE_PATH` 在 Windows 下可设置为 `C:\data\skills` 或 `D:\data\skills`
+> - 环境变量 `SKILL_STORAGE_PATH` 示例：`/data/skills` 或 `/var/lib/agentskills/skills`
 
 ### 2.3 性能注意事项
 
@@ -332,7 +399,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 
 ## 3. 数据模型
 
-> **一致性说明**: 本章代码片段以“规范/推荐实现”为主，部分细节（例如 `ForeignKey(..., ondelete="CASCADE")` 的数据库级联删除）在当前仓库实现中未开启；当前实现主要依赖 ORM 关系的 `cascade="all, delete-orphan"` 行为来清理关联数据。若对数据库级联有硬性要求，请以仓库迁移脚本与模型定义为准并按需补齐。
+> **一致性说明**: 本章代码片段展示推荐实现。实际代码使用 Mixin 模式（`UUIDPrimaryKeyMixin`, `TimestampMixin`）减少重复定义，ORM 层配置 `cascade="all, delete-orphan"` 实现级联删除，数据库层通过迁移脚本添加 `ondelete="CASCADE"` 约束确保数据一致性。
 
 ### 3.1 User 模型
 
@@ -405,6 +472,12 @@ class Skill(Base):
 
     # 关系定义
     user: Mapped["User"] = relationship("User", back_populates="skills")
+    versions = relationship(
+        "SkillVersion",
+        back_populates="skill",
+        cascade="all, delete-orphan",
+        order_by="SkillVersion.created_at.desc()",
+    )
 
     # 表级约束
     __table_args__ = (
@@ -428,7 +501,7 @@ class SkillVersion(Base):
     __table_args__ = (UniqueConstraint("skill_id", "version", name="uix_skill_versions"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=generate_uuid)
-    skill_id: Mapped[str] = mapped_column(String(36), ForeignKey("skills.id"), index=True)
+    skill_id: Mapped[str] = mapped_column(String(36), ForeignKey("skills.id", ondelete="CASCADE"), index=True)
     version: Mapped[str] = mapped_column(String(50))
     description: Mapped[str] = mapped_column(String(500), default="")
     dependencies: Mapped[list[str]] = mapped_column(JSON, default=list)
@@ -438,7 +511,7 @@ class SkillVersion(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
-    skill: Mapped["Skill"] = relationship("Skill")
+    skill: Mapped["Skill"] = relationship("Skill", back_populates="versions")
 ```
 
 > **API 字段口径说明**：SkillVersion 内部属性使用 `metadata_json`，数据库列名为 `metadata`；对外 Schema 仍保持字段名 `metadata`（通过别名与序列化配置统一口径）。
@@ -492,7 +565,7 @@ class APIToken(Base):
 
 #### API 版本弃用实现方案
 
-> 本节为参考实现/可选扩展，当前仓库未实现 `core/middleware/deprecation.py`、`core/decorators/deprecation.py`、`services/notification.py` 等代码。若需要该能力，请按本文示例自行落地并以实际代码为准。
+> **已实现**：本节代码已在仓库中落地，参见 `core/middleware/deprecation.py`、`core/decorators/deprecation.py`。配置项已集成到 `config/settings.py`。
 
 **含义说明**
 
@@ -508,168 +581,248 @@ class APIToken(Base):
 - **标准化可集成**：与 RFC 8594 的 `Sunset` 语义一致，便于网关、监控与外部工具识别。
 - **版本演进可控**：为“旧版本至少 6 个月兼容期”的策略提供可执行支撑。
 
-使用 FastAPI 中间件实现自动添加弃用响应头：
+使用纯 ASGI 中间件实现自动添加弃用响应头（避免 `BaseHTTPMiddleware` 的弃用问题）：
 
 ```python
 # core/middleware/deprecation.py
-from fastapi import Request, Response
-from starlette.middleware.base import BaseHTTPMiddleware
-from datetime import datetime
-from typing import Dict, Set
+from typing import Callable
 
-# 弃用端点配置：路径 -> 完全移除日期
-DEPRECATED_ENDPOINTS: Dict[str, str] = {
-    "/api/v1/legacy/endpoint": "2025-06-01",
-    "/api/v1/old/feature": "2025-09-01",
-}
-
-# 已弃用的整个版本前缀
-DEPRECATED_VERSIONS: Set[str] = {
-    # "/api/v1",  # 当 v1 整体弃用时启用
-}
+from mcp_agentskills.config.settings import settings
 
 
-class DeprecationMiddleware(BaseHTTPMiddleware):
+class DeprecationMiddleware:
     """
     弃用中间件：为已弃用的端点自动添加 Deprecation 和 Sunset 响应头
 
     响应头说明：
     - Deprecation: true - 表示该端点已弃用
     - Sunset: <date> - 表示该端点将完全移除的日期（RFC 8594）
+    - Link: <alternative>; rel="successor-version" - 替代端点（可选）
+
+    使用纯 ASGI 实现，避免 BaseHTTPMiddleware 的弃用问题
     """
 
-    async def dispatch(self, request: Request, call_next) -> Response:
-        response = await call_next(request)
+    def __init__(
+        self,
+        app: Callable,
+        deprecated_endpoints: dict[str, str] | None = None,
+        deprecated_versions: set[str] | None = None,
+        version_sunset_date: str | None = None,
+    ):
+        self.app = app
+        self.deprecated_endpoints = deprecated_endpoints or {}
+        self.deprecated_versions = deprecated_versions or set()
+        self.version_sunset_date = version_sunset_date
 
-        path = request.url.path
+    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
 
-        # 检查特定端点是否已弃用
-        if path in DEPRECATED_ENDPOINTS:
-            sunset_date = DEPRECATED_ENDPOINTS[path]
-            response.headers["Deprecation"] = "true"
-            response.headers["Sunset"] = sunset_date
+        path = scope["path"]
+        headers_to_add: list[tuple[bytes, bytes]] = []
 
-        # 检查整个版本是否已弃用
-        for version_prefix in DEPRECATED_VERSIONS:
+        if path in self.deprecated_endpoints:
+            headers_to_add.append((b"deprecation", b"true"))
+            sunset_date = self.deprecated_endpoints[path].encode()
+            headers_to_add.append((b"sunset", sunset_date))
+
+        for version_prefix in self.deprecated_versions:
             if path.startswith(version_prefix):
-                response.headers["Deprecation"] = "true"
-                # 从配置或数据库获取具体日落日期
-                response.headers["Sunset"] = "2025-12-31"
+                headers_to_add.append((b"deprecation", b"true"))
+                if self.version_sunset_date:
+                    headers_to_add.append((b"sunset", self.version_sunset_date.encode()))
                 break
 
-        return response
+        if not headers_to_add:
+            await self.app(scope, receive, send)
+            return
+
+        async def send_wrapper(message: dict) -> None:
+            if message["type"] == "http.response.start":
+                existing_headers = list(message.get("headers", []))
+                message["headers"] = existing_headers + headers_to_add
+            await send(message)
+
+        await self.app(scope, receive, send_wrapper)
 
 
-# 在 api_app.py 中使用
-from fastapi import FastAPI
-from mcp_agentskills.core.middleware.deprecation import DeprecationMiddleware
+def create_deprecation_middleware(app: Callable) -> DeprecationMiddleware:
+    from mcp_agentskills.config.settings import settings
+
+    return DeprecationMiddleware(
+        app,
+        deprecated_endpoints=settings.DEPRECATED_ENDPOINTS,
+        deprecated_versions=settings.DEPRECATED_VERSIONS,
+        version_sunset_date=settings.DEPRECATED_VERSION_SUNSET_DATE,
+    )
+```
+
+**配置项**（在 `config/settings.py` 中）：
+
+```python
+class Settings(BaseSettings):
+    # ... 其他配置 ...
+
+    ENABLE_DEPRECATION_HEADERS: bool = True
+
+    # 弃用端点配置：路径 -> 完全移除日期（ISO 8601格式）
+    # 环境变量示例：DEPRECATED_ENDPOINTS='{"\/api\/v1\/legacy\/endpoint": "2026-12-31"}'
+    DEPRECATED_ENDPOINTS: dict = {}
+
+    # 已弃用的整个版本前缀
+    # 环境变量示例：DEPRECATED_VERSIONS='["/api/v1"]'
+    DEPRECATED_VERSIONS: set = set()
+
+    # 版本级别的日落日期
+    DEPRECATED_VERSION_SUNSET_DATE: str = ""
+```
+
+**在 api_app.py 中集成**：
+
+```python
+from mcp_agentskills.core.middleware.deprecation import create_deprecation_middleware
 
 def create_application() -> FastAPI:
-    app = FastAPI()
-
-    # 添加弃用中间件
-    app.add_middleware(DeprecationMiddleware)
-
-    # ... 其他配置
-
-    return app
+    # ... 其他中间件 ...
+    if settings.ENABLE_DEPRECATION_HEADERS:
+        application.add_middleware(create_deprecation_middleware)
+    # ...
 ```
 
 #### 端点级别的弃用装饰器（可选）
 
-对于单个端点的弃用，可以使用装饰器：
+对于单个端点的弃用，可以使用装饰器。**注意**：路由函数必须在参数中声明 `response: Response` 才能正确设置响应头：
 
 ```python
 # core/decorators/deprecation.py
 from functools import wraps
-from fastapi import Response
-from datetime import datetime
-from typing import Optional
+from typing import Callable, Optional
 
-def deprecated(sunset_date: Optional[str] = None, alternative: Optional[str] = None):
+from fastapi import Response
+
+
+def deprecated(
+    sunset_date: Optional[str] = None,
+    alternative: Optional[str] = None,
+) -> Callable:
     """
-    标记端点为已弃用
+    标记端点为已弃用的装饰器
+
+    注意：此装饰器需要配合 FastAPI 的 Response 依赖注入使用。
+    路由函数必须在参数中声明 `response: Response` 才能正确设置响应头。
 
     Args:
-        sunset_date: 端点完全移除的日期（ISO 8601格式）
+        sunset_date: 端点完全移除的日期（ISO 8601格式，如 "2026-12-31"）
         alternative: 替代端点的路径
     """
-    def decorator(func):
+
+    def decorator(func: Callable) -> Callable:
         @wraps(func)
-        async def wrapper(*args, **kwargs):
-            # 获取 response 对象（如果在 kwargs 中）
-            response = kwargs.get('response')
-            if response and isinstance(response, Response):
+        async def wrapper(*args, response: Optional[Response] = None, **kwargs):
+            if response is not None and isinstance(response, Response):
                 response.headers["Deprecation"] = "true"
                 if sunset_date:
                     response.headers["Sunset"] = sunset_date
                 if alternative:
                     response.headers["Link"] = f'<{alternative}>; rel="successor-version"'
 
-            return await func(*args, **kwargs)
+            return await func(*args, response=response, **kwargs)
 
-        # 标记函数已弃用（用于文档生成）
         wrapper._deprecated = True
         wrapper._sunset_date = sunset_date
         wrapper._alternative = alternative
 
         return wrapper
+
     return decorator
 
 
-# 使用示例
+def get_deprecation_metadata(func: Callable) -> dict:
+    """
+    获取函数的弃用元数据，用于文档生成
+
+    Returns:
+        dict: 包含 deprecated, sunset_date, alternative 的字典
+    """
+    return {
+        "deprecated": getattr(func, "_deprecated", False),
+        "sunset_date": getattr(func, "_sunset_date", None),
+        "alternative": getattr(func, "_alternative", None),
+    }
+```
+
+**使用示例**：
+
+```python
 from fastapi import APIRouter, Response
 from mcp_agentskills.core.decorators.deprecation import deprecated
 
 router = APIRouter()
 
 @router.get("/legacy/endpoint")
-@deprecated(sunset_date="2027-06-01", alternative="/api/v1/new/endpoint")
+@deprecated(sunset_date="2026-12-31", alternative="/api/v1/new/endpoint")
 async def legacy_endpoint(response: Response):
     '''
     已弃用的端点
 
-    **弃用说明**: 该端点将于 2027-06-01 移除，请迁移到 `/api/v1/new/endpoint`
+    **弃用说明**: 该端点将于 2026-12-31 移除，请迁移到 `/api/v1/new/endpoint`
     '''
     return {"message": "This endpoint is deprecated"}
 ```
 
 #### 版本弃用通知机制
 
+通知服务与审计系统集成，记录弃用通知事件：
+
 ```python
-# services/notification.py
-from datetime import datetime, timedelta
-from typing import List
+# services/deprecation_notification.py
+from datetime import datetime, timezone
+
+from mcp_agentskills.config.settings import settings
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
+
 
 class DeprecationNotifier:
     """弃用通知服务"""
 
-    async def notify_upcoming_deprecation(self):
+    def __init__(self, audit_repo: AuditLogRepository):
+        self.audit_repo = audit_repo
+
+    async def notify_upcoming_deprecation(self) -> list[dict]:
         """
         提前通知即将弃用的端点
         建议在 CI/CD 或定时任务中执行
         """
         notifications = []
+        now = datetime.now(timezone.utc)
 
-        for endpoint, sunset_date_str in DEPRECATED_ENDPOINTS.items():
+        for endpoint, sunset_date_str in settings.DEPRECATED_ENDPOINTS.items():
             sunset_date = datetime.fromisoformat(sunset_date_str)
-            days_until_removal = (sunset_date - datetime.now()).days
+            days_until_removal = (sunset_date - now).days
 
-            # 提前 90 天、30 天、7 天发送通知
             if days_until_removal in [90, 30, 7]:
-                notifications.append({
+                notification = {
                     "endpoint": endpoint,
                     "sunset_date": sunset_date_str,
                     "days_remaining": days_until_removal,
-                    "severity": "warning" if days_until_removal > 7 else "critical"
-                })
+                    "severity": "warning" if days_until_removal > 7 else "critical",
+                }
+                notifications.append(notification)
 
-        # 发送通知（邮件、Webhook 等）
+                await self.audit_repo.create_event(
+                    actor_id="system",
+                    action="deprecation_notice",
+                    target=endpoint,
+                    result="pending",
+                    metadata=notification,
+                )
+
         await self._send_notifications(notifications)
+        return notifications
 
-    async def _send_notifications(self, notifications: List[dict]):
-        """实际发送通知"""
-        # 实现通知逻辑（邮件、Slack、Webhook 等）
+    async def _send_notifications(self, notifications: list[dict]) -> None:
+        """实际发送通知（邮件、Slack、Webhook 等）"""
         pass
 ```
 
@@ -700,6 +853,7 @@ class DeprecationNotifier:
 
 - 登录不使用密码，使用邮箱验证码完成登录
 - 注册与邮箱绑定复用同一套验证码发送与校验流程
+- 邮箱绑定接口位于用户模块：`POST /api/v1/users/bind-email`（详见 4.2 用户模块）
 
 #### POST `/api/v1/auth/verification-code`
 

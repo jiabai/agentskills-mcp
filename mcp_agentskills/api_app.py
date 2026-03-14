@@ -18,6 +18,7 @@ from mcp_agentskills.api.mcp import (
 )
 from mcp_agentskills.api.router import api_router
 from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.middleware.deprecation import create_deprecation_middleware
 from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware, configure_loguru
 from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
 from mcp_agentskills.db.session import engine, init_db
@@ -68,6 +69,8 @@ def create_application() -> FastAPI:
     )
     application.add_middleware(RequestLoggingMiddleware)
     application.add_middleware(RateLimitMiddleware)
+    if settings.ENABLE_DEPRECATION_HEADERS:
+        application.add_middleware(create_deprecation_middleware)
     application.add_middleware(_SlashPathMiddleware, paths={"/mcp", "/sse"})
     application.include_router(api_router, prefix="/api/v1")
     application.mount("/mcp", McpAppProxy(get_http_app))

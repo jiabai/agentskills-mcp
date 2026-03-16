@@ -18,10 +18,12 @@ from mcp_agentskills.api.mcp import (
 )
 from mcp_agentskills.api.router import api_router
 from mcp_agentskills.config.settings import settings
-from mcp_agentskills.core.middleware.deprecation import create_deprecation_middleware
+from mcp_agentskills.core.middleware.deprecation import DeprecationMiddleware
 from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware, configure_loguru
 from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
-from mcp_agentskills.db.session import engine, init_db
+from mcp_agentskills.db.session import engine, get_async_session, init_db
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
+from mcp_agentskills.services.deprecation_notification import DeprecationNotifier
 
 
 class _SlashPathMiddleware:
@@ -44,6 +46,14 @@ class _SlashPathMiddleware:
 async def lifespan(_application: FastAPI):
     await init_db()
     await ensure_mcp_initialized()
+    if settings.ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP:
+        async for session in get_async_session():
+            notifier = DeprecationNotifier(
+                AuditLogRepository(session),
+                day_offsets=list(settings.DEPRECATION_NOTIFY_OFFSETS_DAYS),
+            )
+            await notifier.notify_upcoming_deprecation()
+            break
     async with AsyncExitStack() as stack:
         for mcp_app in (get_http_app(), get_sse_app()):
             router = getattr(mcp_app, "router", None)
@@ -70,7 +80,12 @@ def create_application() -> FastAPI:
     application.add_middleware(RequestLoggingMiddleware)
     application.add_middleware(RateLimitMiddleware)
     if settings.ENABLE_DEPRECATION_HEADERS:
-        application.add_middleware(create_deprecation_middleware)
+        application.add_middleware(
+            DeprecationMiddleware,
+            deprecated_endpoints=settings.DEPRECATED_ENDPOINTS,
+            deprecated_versions=settings.DEPRECATED_VERSIONS,
+            version_sunset_date=settings.DEPRECATED_VERSION_SUNSET_DATE,
+        )
     application.add_middleware(_SlashPathMiddleware, paths={"/mcp", "/sse"})
     application.include_router(api_router, prefix="/api/v1")
     application.mount("/mcp", McpAppProxy(get_http_app))

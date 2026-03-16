@@ -1,4 +1,5 @@
 from functools import wraps
+from inspect import signature
 from typing import Callable, Optional
 
 from fastapi import Response
@@ -11,8 +12,8 @@ def deprecated(
     """
     标记端点为已弃用的装饰器
 
-    注意：此装饰器需要配合 FastAPI 的 Response 依赖注入使用。
-    路由函数必须在参数中声明 `response: Response` 才能正确设置响应头。
+    注意：推荐配合 FastAPI 的 Response 依赖注入使用。
+    当路由函数未声明 `response: Response` 时，装饰器会尝试在运行时参数中查找 Response 对象并写入响应头。
 
     Args:
         sunset_date: 端点完全移除的日期（ISO 8601格式，如 "2026-12-31"）
@@ -27,20 +28,34 @@ def deprecated(
     """
 
     def decorator(func: Callable) -> Callable:
+        accepts_response = "response" in signature(func).parameters
+
         @wraps(func)
         async def wrapper(*args, response: Optional[Response] = None, **kwargs):
-            if response is not None and isinstance(response, Response):
-                response.headers["Deprecation"] = "true"
+            target_response = response
+            if target_response is None:
+                value = kwargs.get("response")
+                if isinstance(value, Response):
+                    target_response = value
+            if target_response is None:
+                for item in args:
+                    if isinstance(item, Response):
+                        target_response = item
+                        break
+            if target_response is not None:
+                target_response.headers["Deprecation"] = "true"
                 if sunset_date:
-                    response.headers["Sunset"] = sunset_date
+                    target_response.headers["Sunset"] = sunset_date
                 if alternative:
-                    response.headers["Link"] = f'<{alternative}>; rel="successor-version"'
+                    target_response.headers["Link"] = f'<{alternative}>; rel="successor-version"'
+            if accepts_response:
+                if "response" not in kwargs and response is not None:
+                    kwargs["response"] = response
+            return await func(*args, **kwargs)
 
-            return await func(*args, response=response, **kwargs)
-
-        wrapper._deprecated = True
-        wrapper._sunset_date = sunset_date
-        wrapper._alternative = alternative
+        setattr(wrapper, "_deprecated", True)
+        setattr(wrapper, "_sunset_date", sunset_date)
+        setattr(wrapper, "_alternative", alternative)
 
         return wrapper
 

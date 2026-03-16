@@ -565,13 +565,14 @@ class APIToken(Base):
 
 #### API 版本弃用实现方案
 
-> **已实现**：本节代码已在仓库中落地，参见 `core/middleware/deprecation.py`、`core/decorators/deprecation.py`。配置项已集成到 `config/settings.py`。
+> **已实现**：本节代码已在仓库中落地，参见 `core/middleware/deprecation.py`、`core/decorators/deprecation.py`、`services/deprecation_notification.py`。配置项已集成到 `config/settings.py`，并已支持启动时通知扫描开关。
 
 **含义说明**
 
 - **弃用中间件**：在网关层统一识别已弃用的端点或版本前缀，并自动附加 `Deprecation: true` 与 `Sunset` 响应头，明确“该接口已弃用”以及“预计移除日期”。
 - **弃用装饰器**：对单个端点进行更细粒度标记，可附带替代端点的指引信息，方便生成文档与提示迁移路径。
-- **通知机制**：按时间节点（示例为 90/30/7 天前）主动推送即将下线的提醒，建议通过定时任务或 CI/CD 调度执行。
+- **通知机制**：按时间节点（默认 90/30/7 天前，可配置）主动推送即将下线的提醒，支持启动时扫描或通过定时任务/CI 调度执行。
+- **MCP 可见性增强**：`skill://list` 资源可返回 `deprecation_info`，便于 Agent/客户端在非 HTTP 场景感知弃用状态。
 
 **意义与价值**
 
@@ -585,9 +586,7 @@ class APIToken(Base):
 
 ```python
 # core/middleware/deprecation.py
-from typing import Callable
-
-from mcp_agentskills.config.settings import settings
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 
 class DeprecationMiddleware:
@@ -604,7 +603,7 @@ class DeprecationMiddleware:
 
     def __init__(
         self,
-        app: Callable,
+        app: ASGIApp,
         deprecated_endpoints: dict[str, str] | None = None,
         deprecated_versions: set[str] | None = None,
         version_sunset_date: str | None = None,
@@ -614,7 +613,7 @@ class DeprecationMiddleware:
         self.deprecated_versions = deprecated_versions or set()
         self.version_sunset_date = version_sunset_date
 
-    async def __call__(self, scope: dict, receive: Callable, send: Callable) -> None:
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -623,22 +622,22 @@ class DeprecationMiddleware:
         headers_to_add: list[tuple[bytes, bytes]] = []
 
         if path in self.deprecated_endpoints:
-            headers_to_add.append((b"deprecation", b"true"))
+            headers_to_add.append((b"Deprecation", b"true"))
             sunset_date = self.deprecated_endpoints[path].encode()
-            headers_to_add.append((b"sunset", sunset_date))
+            headers_to_add.append((b"Sunset", sunset_date))
 
         for version_prefix in self.deprecated_versions:
             if path.startswith(version_prefix):
-                headers_to_add.append((b"deprecation", b"true"))
+                headers_to_add.append((b"Deprecation", b"true"))
                 if self.version_sunset_date:
-                    headers_to_add.append((b"sunset", self.version_sunset_date.encode()))
+                    headers_to_add.append((b"Sunset", self.version_sunset_date.encode()))
                 break
 
         if not headers_to_add:
             await self.app(scope, receive, send)
             return
 
-        async def send_wrapper(message: dict) -> None:
+        async def send_wrapper(message: Message) -> None:
             if message["type"] == "http.response.start":
                 existing_headers = list(message.get("headers", []))
                 message["headers"] = existing_headers + headers_to_add
@@ -647,7 +646,7 @@ class DeprecationMiddleware:
         await self.app(scope, receive, send_wrapper)
 
 
-def create_deprecation_middleware(app: Callable) -> DeprecationMiddleware:
+def create_deprecation_middleware(app: ASGIApp) -> DeprecationMiddleware:
     from mcp_agentskills.config.settings import settings
 
     return DeprecationMiddleware(
@@ -665,6 +664,7 @@ class Settings(BaseSettings):
     # ... 其他配置 ...
 
     ENABLE_DEPRECATION_HEADERS: bool = True
+    ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP: bool = False
 
     # 弃用端点配置：路径 -> 完全移除日期（ISO 8601格式）
     # 环境变量示例：DEPRECATED_ENDPOINTS='{"\/api\/v1\/legacy\/endpoint": "2026-12-31"}'
@@ -676,27 +676,55 @@ class Settings(BaseSettings):
 
     # 版本级别的日落日期
     DEPRECATED_VERSION_SUNSET_DATE: str = ""
+    DEPRECATION_NOTIFY_OFFSETS_DAYS: List[int] = [90, 30, 7]
 ```
 
 **在 api_app.py 中集成**：
 
 ```python
-from mcp_agentskills.core.middleware.deprecation import create_deprecation_middleware
+from mcp_agentskills.core.middleware.deprecation import DeprecationMiddleware
 
 def create_application() -> FastAPI:
     # ... 其他中间件 ...
     if settings.ENABLE_DEPRECATION_HEADERS:
-        application.add_middleware(create_deprecation_middleware)
+        application.add_middleware(
+            DeprecationMiddleware,
+            deprecated_endpoints=settings.DEPRECATED_ENDPOINTS,
+            deprecated_versions=settings.DEPRECATED_VERSIONS,
+            version_sunset_date=settings.DEPRECATED_VERSION_SUNSET_DATE,
+        )
     # ...
+```
+
+```python
+from contextlib import asynccontextmanager
+
+from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
+from mcp_agentskills.services.deprecation_notification import DeprecationNotifier
+
+@asynccontextmanager
+async def lifespan(_application: FastAPI):
+    # ... 其他初始化逻辑 ...
+    if settings.ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP:
+        async for session in get_async_session():
+            notifier = DeprecationNotifier(
+                AuditLogRepository(session),
+                day_offsets=list(settings.DEPRECATION_NOTIFY_OFFSETS_DAYS),
+            )
+            await notifier.notify_upcoming_deprecation()
+            break
+    yield
 ```
 
 #### 端点级别的弃用装饰器（可选）
 
-对于单个端点的弃用，可以使用装饰器。**注意**：路由函数必须在参数中声明 `response: Response` 才能正确设置响应头：
+对于单个端点的弃用，可以使用装饰器。**注意**：推荐在路由函数中声明 `response: Response` 以确保稳定注入响应头；未声明时装饰器也可工作，但仅在运行时可获取到 `Response` 对象时写入响应头：
 
 ```python
 # core/decorators/deprecation.py
 from functools import wraps
+from inspect import signature
 from typing import Callable, Optional
 
 from fastapi import Response
@@ -709,8 +737,8 @@ def deprecated(
     """
     标记端点为已弃用的装饰器
 
-    注意：此装饰器需要配合 FastAPI 的 Response 依赖注入使用。
-    路由函数必须在参数中声明 `response: Response` 才能正确设置响应头。
+    注意：推荐配合 FastAPI 的 Response 依赖注入使用。
+    当路由函数未声明 `response: Response` 时，装饰器会尝试在运行时参数中查找 Response 对象并写入响应头。
 
     Args:
         sunset_date: 端点完全移除的日期（ISO 8601格式，如 "2026-12-31"）
@@ -718,20 +746,34 @@ def deprecated(
     """
 
     def decorator(func: Callable) -> Callable:
+        accepts_response = "response" in signature(func).parameters
+
         @wraps(func)
         async def wrapper(*args, response: Optional[Response] = None, **kwargs):
-            if response is not None and isinstance(response, Response):
-                response.headers["Deprecation"] = "true"
+            target_response = response
+            if target_response is None:
+                value = kwargs.get("response")
+                if isinstance(value, Response):
+                    target_response = value
+            if target_response is None:
+                for item in args:
+                    if isinstance(item, Response):
+                        target_response = item
+                        break
+            if target_response is not None:
+                target_response.headers["Deprecation"] = "true"
                 if sunset_date:
-                    response.headers["Sunset"] = sunset_date
+                    target_response.headers["Sunset"] = sunset_date
                 if alternative:
-                    response.headers["Link"] = f'<{alternative}>; rel="successor-version"'
+                    target_response.headers["Link"] = f'<{alternative}>; rel="successor-version"'
 
-            return await func(*args, response=response, **kwargs)
+            if accepts_response and "response" not in kwargs and response is not None:
+                kwargs["response"] = response
+            return await func(*args, **kwargs)
 
-        wrapper._deprecated = True
-        wrapper._sunset_date = sunset_date
-        wrapper._alternative = alternative
+        setattr(wrapper, "_deprecated", True)
+        setattr(wrapper, "_sunset_date", sunset_date)
+        setattr(wrapper, "_alternative", alternative)
 
         return wrapper
 
@@ -771,9 +813,9 @@ async def legacy_endpoint(response: Response):
     return {"message": "This endpoint is deprecated"}
 ```
 
-#### 版本弃用通知机制
+#### 版本弃用通知机制（已实现）
 
-通知服务与审计系统集成，记录弃用通知事件：
+通知服务已与审计系统集成，记录弃用通知事件（`action=deprecation_notice`）：
 
 ```python
 # services/deprecation_notification.py
@@ -781,39 +823,59 @@ from datetime import datetime, timezone
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.repositories.audit_log import AuditLogRepository
+from mcp_agentskills.services.audit import AuditService
 
 
 class DeprecationNotifier:
     """弃用通知服务"""
 
-    def __init__(self, audit_repo: AuditLogRepository):
+    def __init__(self, audit_repo: AuditLogRepository, day_offsets: list[int] | None = None):
         self.audit_repo = audit_repo
+        self.day_offsets = day_offsets if day_offsets is not None else list(settings.DEPRECATION_NOTIFY_OFFSETS_DAYS)
 
-    async def notify_upcoming_deprecation(self) -> list[dict]:
+    @staticmethod
+    def _parse_sunset_date(value: str) -> datetime | None:
+        raw = str(value or "").strip()
+        if not raw:
+            return None
+        normalized = raw.replace("Z", "+00:00")
+        try:
+            parsed = datetime.fromisoformat(normalized)
+        except ValueError:
+            return None
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+
+    async def notify_upcoming_deprecation(self, deprecated_endpoints: dict[str, str] | None = None) -> list[dict]:
         """
         提前通知即将弃用的端点
         建议在 CI/CD 或定时任务中执行
         """
         notifications = []
-        now = datetime.now(timezone.utc)
+        source = deprecated_endpoints if deprecated_endpoints is not None else settings.DEPRECATED_ENDPOINTS
+        today = datetime.now(timezone.utc).date()
+        service = AuditService(self.audit_repo)
 
-        for endpoint, sunset_date_str in settings.DEPRECATED_ENDPOINTS.items():
-            sunset_date = datetime.fromisoformat(sunset_date_str)
-            days_until_removal = (sunset_date - now).days
+        for endpoint, sunset_date_str in source.items():
+            sunset_date = self._parse_sunset_date(str(sunset_date_str))
+            if sunset_date is None:
+                continue
+            days_until_removal = (sunset_date.date() - today).days
 
-            if days_until_removal in [90, 30, 7]:
+            if days_until_removal in self.day_offsets:
                 notification = {
                     "endpoint": endpoint,
-                    "sunset_date": sunset_date_str,
+                    "sunset_date": sunset_date.date().isoformat(),
                     "days_remaining": days_until_removal,
                     "severity": "warning" if days_until_removal > 7 else "critical",
                 }
                 notifications.append(notification)
 
-                await self.audit_repo.create_event(
+                await service.create_event(
                     actor_id="system",
                     action="deprecation_notice",
-                    target=endpoint,
+                    target=str(endpoint),
                     result="pending",
                     metadata=notification,
                 )
@@ -823,7 +885,26 @@ class DeprecationNotifier:
 
     async def _send_notifications(self, notifications: list[dict]) -> None:
         """实际发送通知（邮件、Slack、Webhook 等）"""
-        pass
+        return None
+```
+
+`skill://list` 资源中可返回弃用可见性信息（用于非 HTTP 客户端）：
+
+```json
+{
+  "skills": [
+    {
+      "skill_id": "ef4f9d90-2f50-4ef0-8dbe-8d0d0f9db3d4",
+      "name": "example-skill",
+      "version": "1.0.0",
+      "visible": "team",
+      "deprecation_info": {
+        "deprecated": true,
+        "sunset": "2026-12-31"
+      }
+    }
+  ]
+}
 ```
 
 ### 4.1 认证模块 `/api/v1/auth`
@@ -1146,6 +1227,7 @@ class DeprecationNotifier:
 **权限说明**
 
 - 仅 `is_superuser=true` 的用户可调用，非管理员返回 403
+- 当前实现按 `current_user.id` 清理窗口内指标，适用于“管理员自有账户”的近 24h 指标重置场景
 
 ### 4.6 MCP模块
 
@@ -1160,7 +1242,7 @@ class DeprecationNotifier:
 
 | 能力 | 形式 | 名称/URI | 说明 |
 |------|------|----------|------|
-| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（支持可见性过滤；`visible` 字段已标准化并有测试覆盖） |
+| 技能列表 | Tool（返回 Resource Payload） | `skill_list_resource` → `skill://list` | 返回可用技能列表（支持可见性过滤；`visible` 字段已标准化并有测试覆盖，且包含 `deprecation_info`） |
 | 技能详情 | Tool（返回 Resource Payload） | `skill_detail_resource` → `skill://{id}@{version}` | 返回技能元数据、依赖与参数定义（来自版本归档的 `SKILL.md`） |
 | 技能执行 | Tool | `execute_skill` | 根据 `SKILL.md` 中的 `command` 或 `entrypoint` 执行技能（受命令白名单限制） |
 | 技能元数据扫描 | Tool | `load_skill_metadata` | 扫描 Skill 目录读取 `SKILL.md` frontmatter |
@@ -1231,7 +1313,7 @@ class DeprecationNotifier:
     "timestamp": "2026-03-06T10:12:00Z",
     "ip": "10.0.0.5",
     "user_agent": "OpenClaw/1.0",
-    "metadata": {}
+    "details": {}
   }]
 }
 ```
@@ -1276,9 +1358,9 @@ class DeprecationNotifier:
 
 ### 5.1 JWT认证（Web API）
 
-- **Access Token**: 有效期30分钟，用于API访问
-- **Refresh Token**: 有效期7天，用于刷新Access Token
-- **算法**: HS256
+- **Access Token**: 默认有效期 30 分钟（`ACCESS_TOKEN_EXPIRE_MINUTES`），用于 API 访问
+- **Refresh Token**: 默认有效期 7 天（`REFRESH_TOKEN_EXPIRE_DAYS`），用于刷新 Access Token
+- **算法**: 默认 `HS256`（可通过 `ALGORITHM` 配置）
 - **Header**: `Authorization: Bearer {access_token}`
 
 ### 5.2 API Token认证（MCP服务）
@@ -1289,6 +1371,7 @@ class DeprecationNotifier:
 - **存储**: 仅存储SHA256哈希值
 - **Header**: `Authorization: Bearer {api_token}`
 - **过期**: 可选设置过期时间
+- **认证策略**: MCP 入口优先校验 API Token；若失败再尝试 JWT Access Token（兼容模式）
 
 ### 5.3 Token生成示例
 
@@ -1362,7 +1445,12 @@ token_hash = hashlib.sha256(token.encode()).hexdigest()
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│  8. 返回用户信息，继续处理请求                                       │
+│  8. 若 API Token 失败，则尝试 JWT Access Token 兼容校验              │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│  9. 返回用户信息，继续处理请求                                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -1412,6 +1500,21 @@ class ApiTokenVerifier:
             return AccessToken(token=token, client_id=str(user.id), scopes=[], expires_at=expires_at)
 ```
 
+```python
+# mcp_agentskills/api/mcp/__init__.py（MCP 入口兼容校验）
+async def _authorize_mcp_request(scope: Scope, receive: Receive, send: Send) -> bool:
+    token = _extract_bearer_token(scope)
+    verifier = ApiTokenVerifier()
+    access_token, error = await verifier.verify_token_with_error(token)
+    if access_token:
+        return True
+    payload = decode_token(token)
+    if payload.get("type") != "access":
+        await _send_error(scope, receive, send, "Invalid token type", "INVALID_TOKEN_TYPE")
+        return False
+    # ... 省略用户查询与上下文注入 ...
+```
+
 #### 错误响应
 
 | 错误码 | 描述 | HTTP 状态码 |
@@ -1420,6 +1523,9 @@ class ApiTokenVerifier:
 | `TOKEN_NOT_FOUND` | Token 不存在 | 401 |
 | `TOKEN_REVOKED` | Token 已被撤销 | 401 |
 | `TOKEN_EXPIRED` | Token 已过期 | 401 |
+| `INVALID_TOKEN_TYPE` | JWT 不是 access 类型 | 401 |
+| `INVALID_TOKEN` | JWT 无效（缺少必要字段等） | 401 |
+| `USER_NOT_FOUND` | JWT 对应用户不存在或已禁用 | 401 |
 
 ---
 
@@ -1517,6 +1623,12 @@ async def async_execute(self):
     # ... 其余逻辑不变
 ```
 
+实现补充：
+
+- 返回内容为 `SKILL.md` 原文（当前实现不裁剪 frontmatter）
+- 在用户上下文存在时，会检查技能激活状态；已下架技能返回 `SKILL_DEACTIVATED`
+- 非法技能名返回 `INVALID_SKILL_NAME`
+
 ### 6.4 LoadSkillMetadataOp 改造
 
 ```python
@@ -1553,6 +1665,12 @@ async def async_execute(self):
     # ... 其余逻辑不变
 ```
 
+实现补充：
+
+- `file_name` 会进行路径安全校验，非法路径返回 `INVALID_FILE_PATH`
+- 文件不存在返回 `FILE_NOT_FOUND`
+- 在用户上下文存在时会检查技能状态，下架技能返回 `SKILL_DEACTIVATED`
+
 ### 6.6 RunShellCommandOp 改造
 
 ```python
@@ -1569,7 +1687,8 @@ async def async_execute(self):
     # 安全检查：验证命令是否在白名单中
     is_valid, error_msg = validate_command(command)
     if not is_valid:
-        return tool_error_payload(error_msg, "COMMAND_BLOCKED")
+        self.set_output(tool_error_payload(error_msg, "COMMAND_BLOCKED"))
+        return
 
     if user_id:
         work_dir = skill_dir / user_id / skill_name
@@ -1578,6 +1697,13 @@ async def async_execute(self):
 
     # ... 其余逻辑不变
 ```
+
+实现补充：
+
+- 命令必须通过白名单校验，不通过返回 `COMMAND_BLOCKED`
+- 目录不存在返回 `SKILL_DIR_NOT_FOUND`
+- 资源配额开启时，受并发槽位与工作目录配额约束（`CONCURRENCY_LIMIT` / `QUOTA_EXCEEDED`）
+- 执行超时按 `SKILL_EXECUTION_TIMEOUT_SECONDS` 控制，输出按 `SKILL_MAX_OUTPUT_BYTES` 截断
 
 ### 6.7 Skill 资源接口（`skill://`）补齐
 
@@ -1589,6 +1715,7 @@ async def async_execute(self):
 资源数据来源：
 - 技能集合：数据库 `skills`（按当前用户过滤，且默认不含已下架技能）
 - 技能元数据：版本归档目录 `_versions/{version}/SKILL.md` 的 frontmatter
+- 弃用信息：由配置 `DEPRECATED_ENDPOINTS` / `DEPRECATED_VERSIONS` / `DEPRECATED_VERSION_SUNSET_DATE` 计算并注入 `deprecation_info`
 
 ### 6.8 ExecuteSkillOp（企业执行契约）
 
@@ -1598,6 +1725,8 @@ async def async_execute(self):
 - 执行：从目标版本的 `SKILL.md` 解析 `command` 或 `entrypoint` 推导命令
 - 安全：命令执行受白名单限制，拒绝危险命令
 - 参数：通过环境变量 `SKILL_PARAMS` 传入 JSON 字符串
+- 授权：执行前同时校验 RBAC（`skill.execute`）与可见性（`is_skill_visible`）
+- 审计：开启审计时写入 `skill.execute` 事件（含版本与执行耗时）
 
 ---
 
@@ -1637,12 +1766,16 @@ agentskills-mcp/
 │   │   │   ├── dashboard.py
 │   │   │   └── audit.py
 │   │   └── mcp/
+│   │       ├── __init__.py
 │   │       ├── auth.py
 │   │       ├── http_handler.py
 │   │       └── sse_handler.py
 │   ├── core/
+│   │   ├── decorators/
+│   │   │   └── deprecation.py
 │   │   ├── middleware/
 │   │   │   ├── auth.py
+│   │   │   ├── deprecation.py
 │   │   │   ├── logging.py
 │   │   │   └── rate_limit.py
 │   │   ├── security/
@@ -1691,6 +1824,7 @@ agentskills-mcp/
 │   │   ├── token.py
 │   │   ├── skill.py
 │   │   ├── audit.py
+│   │   ├── deprecation_notification.py
 │   │   ├── verification_code.py
 │   │   └── email_sender.py
 │   ├── schemas/
@@ -1733,13 +1867,14 @@ uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000
 #### main.py（保留）
 
 ```python
-# 现有 FlowLLM 应用入口，用于 stdio/SSE 模式
-# 无需修改，保持向后兼容
+import sys
 
-from flowllm.core.application import Application
+from mcp_agentskills.core.app import AgentSkillsMcpApp
 
-class AgentSkillsMcpApp(Application):
-    # ... 现有代码保留
+
+def main() -> None:
+    with AgentSkillsMcpApp(*sys.argv[1:]) as app:
+        app.run_service()
 ```
 
 #### api_app.py（新增）
@@ -1752,14 +1887,25 @@ from fastapi.middleware.cors import CORSMiddleware
 from mcp_agentskills.api.mcp import McpAppProxy, ensure_mcp_initialized, get_http_app, get_sse_app, shutdown_mcp
 from mcp_agentskills.api.router import api_router
 from mcp_agentskills.config.settings import settings
+from mcp_agentskills.core.middleware.deprecation import DeprecationMiddleware
 from mcp_agentskills.core.middleware.logging import RequestLoggingMiddleware, configure_loguru
 from mcp_agentskills.core.middleware.rate_limit import RateLimitMiddleware
-from mcp_agentskills.db.session import init_db
+from mcp_agentskills.db.session import get_async_session, init_db
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
+from mcp_agentskills.services.deprecation_notification import DeprecationNotifier
 
 @asynccontextmanager
 async def lifespan(_application: FastAPI):
     await init_db()
     await ensure_mcp_initialized()
+    if settings.ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP:
+        async for session in get_async_session():
+            notifier = DeprecationNotifier(
+                AuditLogRepository(session),
+                day_offsets=list(settings.DEPRECATION_NOTIFY_OFFSETS_DAYS),
+            )
+            await notifier.notify_upcoming_deprecation()
+            break
     async with AsyncExitStack() as stack:
         for mcp_app in (get_http_app(), get_sse_app()):
             router = getattr(mcp_app, "router", None)
@@ -1781,6 +1927,13 @@ def create_application() -> FastAPI:
     )
     application.add_middleware(RequestLoggingMiddleware)
     application.add_middleware(RateLimitMiddleware)
+    if settings.ENABLE_DEPRECATION_HEADERS:
+        application.add_middleware(
+            DeprecationMiddleware,
+            deprecated_endpoints=settings.DEPRECATED_ENDPOINTS,
+            deprecated_versions=settings.DEPRECATED_VERSIONS,
+            version_sunset_date=settings.DEPRECATED_VERSION_SUNSET_DATE,
+        )
     application.include_router(api_router, prefix="/api/v1")
     application.mount("/mcp", McpAppProxy(get_http_app))
     application.mount("/sse", McpAppProxy(get_sse_app))
@@ -1826,27 +1979,27 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 | `uvicorn[standard]` | >=0.27.0 | ASGI 服务器 |
 | `sqlalchemy[asyncio]` | >=2.0.0 | ORM |
 | `asyncpg` | >=0.29.0 | PostgreSQL 异步驱动 |
-| `alembic` | >=1.13.0 | 数据库迁移 |
+| `alembic` | 未固定（按安装解析） | 数据库迁移 |
 | `pydantic` | >=2.5.0 | 数据验证 |
 | `pydantic-settings` | >=2.1.0 | 配置管理 |
-| `PyJWT` | >=2.8.0 | JWT 处理 |
-| `passlib[bcrypt]` | >=1.7.4 | 密码哈希 |
-| `python-multipart` | >=0.0.6 | 文件上传 |
+| `PyJWT` | 未固定（按安装解析） | JWT 处理 |
+| `passlib[bcrypt]` | 未固定（按安装解析） | 密码哈希 |
+| `python-multipart` | 未固定（按安装解析） | 文件上传 |
 | `cryptography` | >=42.0.0 | 下载加密与摘要 |
 | `PyYAML` | >=6.0 | YAML/frontmatter 解析 |
 | `flowllm` | >=0.2.0.7 | MCP 框架 |
 | `loguru` | >=0.7.0 | 日志 |
-| `httpx` | >=0.26.0 | HTTP 客户端 |
+| `httpx` | 未固定（按安装解析） | HTTP 客户端 |
 | `psutil` | >=5.9.0 | 系统监控 |
 | `boto3` | >=1.34.0 | S3/MinIO 归档后端 |
 | `ldap3` | >=2.9.1 | LDAP/AD 登录 |
-| `pipreqs` | 最新版 | 依赖推断辅助 |
+| `pipreqs` | 未固定（按安装解析） | 依赖推断辅助 |
 
 ### 8.2 开发依赖
 
 | 依赖包 | 版本要求 | 用途 |
 |--------|---------|------|
-| `pytest` | >=8.0.0 | 测试框架 |
+| `pytest` | >=8.4.2 | 测试框架 |
 | `pytest_asyncio` | >=1.2.0 | 异步测试支持 |
 | `pytest-cov` | >=4.1.0 | 测试覆盖率 |
 | `aiosqlite` | >=0.19.0 | SQLite 异步驱动（测试用） |
@@ -1855,6 +2008,7 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 | `types-PyYAML` | 最新版 | PyYAML 类型提示 |
 | `types-passlib` | 最新版 | passlib 类型提示 |
 | `types-psutil` | 最新版 | psutil 类型提示 |
+| `mkdocs-shadcn` | 最新版 | 文档主题/站点构建 |
 
 ### 8.3 pyproject.toml 示例
 
@@ -1888,8 +2042,8 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=8.0.0",
-    "pytest-asyncio>=1.2.0",
+    "pytest>=8.4.2",
+    "pytest_asyncio>=1.2.0",
     "pytest-cov>=4.1.0",
     "aiosqlite>=0.19.0",
     "ruff>=0.1.0",
@@ -1897,6 +2051,7 @@ dev = [
     "types-PyYAML",
     "types-passlib",
     "types-psutil",
+    "mkdocs-shadcn",
 ]
 ```
 
@@ -1985,6 +2140,14 @@ ENABLE_RESOURCE_QUOTA=false
 ENABLE_NETWORK_EGRESS_CONTROL=false
 ENABLE_RATE_LIMIT=true
 ENABLE_METRICS=true
+ENABLE_DEPRECATION_HEADERS=true
+ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP=false
+
+# API 弃用配置
+DEPRECATED_ENDPOINTS={"\/api\/v1\/legacy\/endpoint":"2026-12-31"}
+DEPRECATED_VERSIONS=["/api/v1"]
+DEPRECATED_VERSION_SUNSET_DATE=2026-12-31
+DEPRECATION_NOTIFY_OFFSETS_DAYS=[90,30,7]
 
 # 企业默认策略
 DEFAULT_SKILL_VISIBILITY=private
@@ -2021,6 +2184,7 @@ LDAP_STATUS_ATTR=status
 # 技能下载与缓存 TTL
 SKILL_DOWNLOAD_TTL_SECONDS=3600
 SKILL_CACHE_TTL_SECONDS=604800
+SKILL_VERSION_BUMP_STRATEGY=patch
 ```
 
 ### 9.2 Settings类
@@ -2151,9 +2315,11 @@ settings = Settings()
 上方代码片段用于说明主要校验逻辑，未完整展开全部配置项。企业私有云相关开关与映射字段以仓库实际实现为准（`mcp_agentskills/config/settings.py`），重点包括：
 
 - 公网/私有化能力开关：`ENABLE_*`
+- API 弃用治理：`ENABLE_DEPRECATION_HEADERS`、`ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP`、`DEPRECATED_*`
 - 权限与默认策略：`DEFAULT_SKILL_VISIBILITY`、`DEFAULT_ROLE`、`RBAC_ROLE_PERMISSIONS`
 - 身份映射：`SSO_*_CLAIM`、`LDAP_*_ATTR`
 - 下载与缓存时效：`SKILL_DOWNLOAD_TTL_SECONDS`、`SKILL_CACHE_TTL_SECONDS`
+- 版本策略：`SKILL_VERSION_BUMP_STRATEGY`
 
 ### 9.3 邮件验证码发送与运维要求
 
@@ -2258,14 +2424,15 @@ async def init_db():
 ### 10.1 密码安全
 
 - 使用bcrypt进行密码哈希
-- 最小密码长度8位
-- 建议包含大小写字母、数字、特殊字符
+- 最小密码长度8位（`schemas/user.py` 中通过 `Field(min_length=8)` 强制）
+- 建议包含大小写字母、数字、特殊字符（当前实现为建议项，未做复杂度强制校验）
 
 ### 10.2 Token安全
 
 - API Token仅在创建时显示一次
 - 存储SHA256哈希值而非明文
 - 支持Token过期和撤销
+- MCP 网关优先校验 API Token；失败后兼容校验 JWT Access Token
 
 ### 10.3 文件上传安全
 
@@ -2288,6 +2455,9 @@ async def init_db():
   - 禁止 `..` 路径遍历
   - 禁止绝对路径
   - 文件名仅允许字母、数字、下划线、连字符和点
+- **上传行为差异**:
+  - 普通文件上传（`upload_file`）仅接收单文件名，不支持子目录路径
+  - ZIP 上传（`upload_zip`）支持子目录，但每个条目都执行路径与扩展名校验
 
 #### 路径遍历防护实现
 
@@ -2444,7 +2614,7 @@ async def upload_skill_file(
 ### 10.4 API安全
 
 - 所有用户API需要JWT认证
-- MCP API需要API Token认证
+- MCP API优先使用API Token认证，并兼容JWT Access Token
 - 实现请求限流
 
 ### 10.5 RunShellCommandOp 安全增强建议
@@ -2484,6 +2654,12 @@ async def upload_skill_file(
 }
 ```
 
+对齐当前实现：
+- `HTTPException` 会统一转换为上述结构；若 `detail` 已是 `{detail, code, ...}` 则保留并补齐 `timestamp`
+- 请求体验证错误（422）统一返回 `{"detail":"Validation error","code":"VALIDATION_ERROR",...}`
+- 未处理异常统一返回 `500` + `INTERNAL_SERVER_ERROR`
+- MCP Tool 场景也复用同字段语义（通常以 JSON 字符串作为 tool output 返回）
+
 ### 11.2 HTTP状态码规范
 
 | 状态码 | 场景 |
@@ -2496,8 +2672,24 @@ async def upload_skill_file(
 | 403 | 无权限 |
 | 404 | 资源不存在 |
 | 409 | 资源冲突（如邮箱已存在） |
+| 429 | 触发限流 |
 | 422 | 请求体验证失败 |
+| 503 | 服务不可用（如健康检查数据库不可达） |
 | 500 | 服务器内部错误 |
+
+### 11.3 默认错误码映射
+
+| HTTP 状态码 | 默认 `code` |
+|------------|-------------|
+| 400 | `BAD_REQUEST` |
+| 401 | `UNAUTHORIZED` |
+| 403 | `FORBIDDEN` |
+| 404 | `NOT_FOUND` |
+| 409 | `CONFLICT` |
+| 422 | `VALIDATION_ERROR` |
+| 500 | `INTERNAL_SERVER_ERROR` |
+
+说明：业务层可返回更细粒度错误码（如 `INVALID_TOKEN_FORMAT`、`SKILL_DEACTIVATED`、`COMMAND_BLOCKED`），全局异常处理会透传该业务错误码。
 
 ---
 
@@ -2505,18 +2697,18 @@ async def upload_skill_file(
 
 ### 12.1 测试覆盖率
 
-- 单元测试覆盖率 >= 80%
-- 核心业务逻辑覆盖率 >= 90%
+- 当前仓库已接入 `pytest` 与 `pytest-cov` 依赖，但未在配置中强制覆盖率阈值
+- 建议以 CI 规则补充覆盖率门槛（如 `--cov-fail-under`）
 
 ### 12.2 测试类型
 
-- 单元测试：Services、Repositories
-- 集成测试：API端点
-- E2E测试：完整用户流程
+- 单元测试：Services、Repositories、Security、Utils、MCP Tool Ops
+- 集成测试：REST API（auth/users/skills/tokens/dashboard/audit）与 MCP 鉴权/资源/工具链路
+- 端到端脚本：仓库提供 `run_project_http.py`、`run_project_sse.py`、`run_skill_agent.py` 用于联调验证
 
 ### 12.3 测试数据库
 
-使用内存SQLite进行测试：
+默认使用内存 SQLite（`conftest.py` 通过环境变量注入）：
 ```python
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 ```
@@ -2541,11 +2733,14 @@ TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
 - 提供Dockerfile
 - 提供docker-compose.yml（包含PostgreSQL）
+- Dockerfile 默认镜像为 `python:3.11-slim`，容器启动时先执行 `alembic upgrade head` 再启动 API
+- docker-compose 默认拆分为 `db` / `migrate` / `api` 三服务，`api` 依赖迁移成功后启动
 
 ### 13.2 数据库迁移
 
 - 使用Alembic进行数据库迁移
 - 提供初始化迁移脚本
+- 迁移目录已初始化为 `mcp_agentskills/db/migrations`，包含 `env.py` 与多个 `versions/*.py`
 
 #### Alembic 异步配置
 
@@ -2617,9 +2812,6 @@ else:
 **迁移命令**:
 
 ```bash
-# 初始化 Alembic（如果尚未初始化）
-alembic init mcp_agentskills/db/migrations
-
 # 创建新迁移
 alembic revision --autogenerate -m "description"
 
@@ -2634,7 +2826,7 @@ alembic downgrade -1
 
 - 提供 `/health` 端点
 - 检查数据库连接状态
-- 提供 `/metrics` 端点（资源与连接指标）
+- 提供 `/metrics` 端点（资源与连接指标，受 `ENABLE_METRICS` 开关控制）
 
 ---
 
@@ -2642,24 +2834,24 @@ alembic downgrade -1
 
 ### Q1: 如何处理现有用户的迁移？
 
-现有系统没有用户概念：
-- 现有 Skills 可保留在全局目录
-- 新用户注册后创建私有目录
-- 可提供迁移工具将全局 Skills 复制到用户目录
+当前实现已采用用户模型与私有技能目录（`/data/skills/{user_id}/{skill_name}`）：
+- 新建/上传技能默认写入用户私有目录
+- MCP Tool 在无用户上下文场景下仍保留全局目录回退逻辑（向后兼容）
+- 若历史数据在全局目录，建议提供一次性迁移脚本复制到目标用户目录并回填数据库记录
 
 ### Q2: 如何实现 Token 黑名单？
 
 可选方案：
-- Redis 方案：存储 revoked token ID，检查时查询
-- 数据库方案：添加 revoked_at 字段
-- 短期方案：缩短 Token 有效期
+- 当前实现：数据库字段 `is_active=false` 即视为撤销，校验失败返回 Token revoked
+- Redis 方案：存储 revoked token ID，适合多实例高并发场景
+- 强化方案：叠加短有效期与轮换策略，降低泄露窗口
 
 ### Q3: 如何扩展为分布式部署？
 
 建议考虑：
 - 数据库：使用托管 PostgreSQL
-- 文件存储：使用对象存储（S3/MinIO）
-- 缓存：使用 Redis
+- 文件存储：启用 `SKILL_ARCHIVE_BACKEND=s3` 并配置对象存储（S3/MinIO）
+- 缓存：按需引入 Redis（当前仓库未强依赖）
 - 负载均衡：Nginx 或云负载均衡器
 
 ---
@@ -2694,4 +2886,4 @@ alembic downgrade -1
 
 - 使用ruff进行代码格式化
 - 使用mypy进行类型检查
-- 行长度限制：100字符
+- 具体规则以仓库当前 Ruff/Mypy 配置为准

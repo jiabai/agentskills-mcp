@@ -103,6 +103,16 @@ def test_skill_version_bump_strategy_invalid():
         )
 
 
+def test_parse_deprecation_notify_offsets_days_from_string():
+    settings = Settings(
+        **{
+            **base_settings_kwargs(),
+            "DEPRECATION_NOTIFY_OFFSETS_DAYS": "120,45,10",
+        },
+    )
+    assert settings.DEPRECATION_NOTIFY_OFFSETS_DAYS == [120, 45, 10]
+
+
 def test_alembic_files_exist():
     root = Path(__file__).resolve().parents[1]
     assert (root / "alembic.ini").exists()

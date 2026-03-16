@@ -81,10 +81,12 @@ class Settings(BaseSettings):
     ENABLE_RATE_LIMIT: bool = True
     ENABLE_METRICS: bool = True
     ENABLE_DEPRECATION_HEADERS: bool = True
+    ENABLE_DEPRECATION_NOTIFIER_ON_STARTUP: bool = False
 
     DEPRECATED_ENDPOINTS: dict = {}
     DEPRECATED_VERSIONS: set = set()
     DEPRECATED_VERSION_SUNSET_DATE: str = ""
+    DEPRECATION_NOTIFY_OFFSETS_DAYS: List[int] = [90, 30, 7]
 
     DEFAULT_SKILL_VISIBILITY: str = "private"
     DEFAULT_ROLE: str = "member"
@@ -172,6 +174,22 @@ class Settings(BaseSettings):
                 return set(parsed) if isinstance(parsed, list) else set()
             return set(item.strip() for item in raw.split(",") if item.strip())
         return set(v) if isinstance(v, (list, set)) else set()
+
+    @field_validator("DEPRECATION_NOTIFY_OFFSETS_DAYS", mode="before")
+    @classmethod
+    def parse_deprecation_notify_offsets_days(cls, v):
+        if isinstance(v, str):
+            raw = v.strip()
+            if raw.startswith("[") and raw.endswith("]"):
+                import json
+
+                parsed = json.loads(raw)
+                if isinstance(parsed, list):
+                    return [int(item) for item in parsed]
+            return [int(item.strip()) for item in raw.split(",") if item.strip()]
+        if isinstance(v, list):
+            return [int(item) for item in v]
+        return [90, 30, 7]
 
     @field_validator("SECRET_KEY")
     @classmethod

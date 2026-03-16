@@ -35,6 +35,12 @@ def _normalized_visibility(value: str | None) -> str:
     return "private"
 
 
+def _deprecation_info() -> dict[str, bool | str | None]:
+    deprecated = bool(settings.DEPRECATED_ENDPOINTS or settings.DEPRECATED_VERSIONS)
+    sunset = str(settings.DEPRECATED_VERSION_SUNSET_DATE or "").strip() or None
+    return {"deprecated": deprecated, "sunset": sunset}
+
+
 @C.register_op()
 class SkillListResourceOp(BaseAsyncToolOp):
     def build_tool_call(self) -> ToolCall:
@@ -94,6 +100,7 @@ class SkillListResourceOp(BaseAsyncToolOp):
                             "created_at": _format_time(skill.created_at),
                             "updated_at": _format_time(skill.updated_at),
                             "tags": skill.tags,
+                            "deprecation_info": _deprecation_info(),
                         }
                     )
                 body = json.dumps({"skills": items}, ensure_ascii=False)

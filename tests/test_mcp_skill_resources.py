@@ -136,6 +136,7 @@ async def test_skill_resource_ops_return_metadata(async_session, tmp_path, monke
     assert skills[0]["skill_id"] == skill.id
     assert skills[0]["version"] == "1.0.0"
     assert skills[0]["visible"] == "team"
+    assert skills[0]["deprecation_info"] == {"deprecated": False, "sunset": None}
     detail_op = SkillDetailResourceOp()
     detail_op.input_dict = {"skill_uuid": skill.id, "version": "1.0.0"}
     await detail_op.async_execute()
@@ -184,6 +185,7 @@ async def test_skill_list_resource_normalizes_visible_field(async_session, tmp_p
     list_payload = json.loads(list_op._output)
     skills = json.loads(list_payload["contents"][0]["text"])["skills"]
     assert skills[0]["visible"] == "team"
+    assert skills[0]["deprecation_info"] == {"deprecated": False, "sunset": None}
 
 
 @pytest.mark.asyncio

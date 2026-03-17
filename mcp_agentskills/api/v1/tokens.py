@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
+from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.auth import get_current_active_user
 from mcp_agentskills.db.session import get_async_session
+from mcp_agentskills.repositories.audit_log import AuditLogRepository
 from mcp_agentskills.repositories.token import TokenRepository
 from mcp_agentskills.repositories.user import UserRepository
 from mcp_agentskills.schemas.token import TokenCreate, TokenListResponse, TokenResponse
+from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.token import TokenService
 
 
@@ -31,6 +34,7 @@ async def list_tokens(
 @router.post("", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @router.post("/", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def create_token(
+    request: Request,
     payload: TokenCreate,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -41,6 +45,16 @@ async def create_token(
         name=payload.name,
         expires_at=payload.expires_at,
     )
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="token.create",
+            target=token.id,
+            ip=request.client.host if request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+            metadata={"name": payload.name},
+        )
     response = TokenResponse.model_validate(token)
     response.token = value
     return response
@@ -48,6 +62,7 @@ async def create_token(
 
 @router.delete("/{token_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_token(
+    request: Request,
     token_id: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -57,4 +72,13 @@ async def delete_token(
         await service.revoke_token(current_user, token_id)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="token.delete",
+            target=token_id,
+            ip=request.client.host if request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
     return None

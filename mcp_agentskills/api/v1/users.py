@@ -61,6 +61,7 @@ async def request_delete_account(
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_me(
+    request: Request,
     payload: UserDeleteConfirm,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -70,8 +71,18 @@ async def delete_me(
         await verification_service.verify_code(current_user.email, "delete_account", payload.code)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    user_id = current_user.id
     service = UserService(UserRepository(session))
     await service.delete_user(current_user)
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=user_id,
+            action="user.delete",
+            target=user_id,
+            ip=request.client.host if request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
     return None
 
 

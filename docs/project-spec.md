@@ -239,13 +239,13 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 | | `skill.activate` | ✅ 已覆盖 | api/v1/skills.py:268 |
 | | `skill.rollback` | ✅ 已覆盖 | api/v1/skills.py:348 |
 | | `skill.execute` | ✅ 已覆盖 | core/tools/execute_skill_op.py:184 |
-| | `skill.update` | ❌ 未覆盖 | api/v1/skills.py:113-126 |
-| | `skill.delete` | ❌ 未覆盖 | api/v1/skills.py:129-139 |
+| | `skill.update` | ✅ 已覆盖 | api/v1/skills.py:120 |
+| | `skill.delete` | ✅ 已覆盖 | api/v1/skills.py:152 |
 | **用户** | `user.identity.update` | ✅ 已覆盖 | api/v1/users.py:123 |
-| | `user.password.change` | ❌ 未覆盖 | api/v1/users.py:53-62 |
-| | `user.delete` | ❌ 未覆盖 | api/v1/users.py:65-75 |
-| **令牌** | `token.create` | ❌ 未覆盖 | api/v1/tokens.py:38-47 |
-| | `token.delete/revoke` | ❌ 未覆盖 | api/v1/tokens.py:50-59 |
+| | `user.password.change` | ⏭ 已跳过 | 密码登录已移除，无修改密码功能 |
+| | `user.delete` | ✅ 已覆盖 | api/v1/users.py:62 |
+| **令牌** | `token.create` | ✅ 已覆盖 | api/v1/tokens.py:38 |
+| | `token.delete/revoke` | ✅ 已覆盖 | api/v1/tokens.py:63 |
 
 **版本自动递增**
 - 默认策略：SemVer patch 递增（可通过 `SKILL_VERSION_BUMP_STRATEGY` 配置 `patch/minor`）
@@ -254,7 +254,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 #### 当前实现边界（截至 2026-03）
 
 - 已实现：`skill_list_resource` 的 `visible` 字段已与真实可见性对齐，并有测试覆盖。
-- 部分实现：审计采集点已覆盖核心链路（认证、技能创建/上传/下载/激活/下架/回滚/执行），但缺少 `skill.update`、`skill.delete`、`token.create/revoke` 等操作审计。
+- 已实现：审计采集点已全覆盖核心链路（认证、技能创建/上传/下载/激活/下架/回滚/执行/更新/删除、用户删除/身份更新、令牌创建/删除）。
 - 已实现：版本自动递增策略支持 `patch/minor` 配置并包含冲突处理。
 - 已实现：客户端缓存过期清理（`SKILL_CACHE_TTL_SECONDS`）与离线降级（`ENABLE_CACHE_OFFLINE_FALLBACK`），并有测试覆盖。
 - 部分实现：技能归档文件支持 S3 对象存储，但技能主文件（SKILL.md 等）仍为本地存储。
@@ -1076,8 +1076,8 @@ class DeprecationNotifier:
 |------|------|------|------|
 | `/me` | GET | 是 | 获取当前用户信息 |
 | `/me` | PUT | 是 | 更新用户信息 |
-| `/me` | DELETE | 是 | 删除账户（需密码确认） |
-| `/me/password` | PUT | 是 | 修改密码 |
+| `/me` | DELETE | 是 | 删除账户（需邮箱验证码确认） |
+| `/me/delete-request` | POST | 是 | 发送账户删除验证码 |
 | `/bind-email` | POST | 是 | 绑定邮箱（验证码校验） |
 | `/{user_id}/identity` | PUT | 是（需 `user.manage`） | 管理员更新用户身份字段（enterprise/team/role/status） |
 

@@ -119,6 +119,7 @@ async def get_skill(
 
 @router.put("/{skill_uuid}", response_model=SkillResponse)
 async def update_skill(
+    request: Request,
     skill_uuid: str,
     payload: SkillUpdate,
     current_user=Depends(get_current_active_user),
@@ -135,11 +136,22 @@ async def update_skill(
         skill = await service.update_skill(current_user, skill_uuid, **fields)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.update",
+            target=skill_uuid,
+            ip=request.client.host if request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+            metadata=fields,
+        )
     return skill
 
 
 @router.delete("/{skill_uuid}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_skill(
+    request: Request,
     skill_uuid: str,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
@@ -151,6 +163,15 @@ async def delete_skill(
         await service.delete_skill(current_user, skill_uuid)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if settings.ENABLE_AUDIT_LOG:
+        audit_service = AuditService(AuditLogRepository(session))
+        await audit_service.create_event(
+            actor_id=current_user.id,
+            action="skill.delete",
+            target=skill_uuid,
+            ip=request.client.host if request.client else "",
+            user_agent=request.headers.get("user-agent", ""),
+        )
     return None
 
 

@@ -11,13 +11,12 @@ from mcp_agentskills.schemas.skill import (
 from mcp_agentskills.schemas.token import TokenCreate, TokenListResponse, TokenRefresh, TokenResponse
 from mcp_agentskills.schemas.user import (
     UserCreate,
-    UserDelete,
+    UserDeleteConfirm,
     UserInDB,
     UserLogin,
     UserLoginCode,
     UserRegisterCode,
     UserBindEmail,
-    UserPasswordUpdate,
     UserResponse,
     UserUpdate,
 )
@@ -41,9 +40,8 @@ __all__ = [
     "UserLoginCode",
     "UserRegisterCode",
     "UserBindEmail",
-    "UserDelete",
+    "UserDeleteConfirm",
     "UserInDB",
-    "UserPasswordUpdate",
     "UserResponse",
     "UserUpdate",
     "SkillCreate",

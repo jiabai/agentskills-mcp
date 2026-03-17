@@ -5,7 +5,6 @@ import jwt
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.security.jwt_utils import create_access_token, create_refresh_token, decode_token
-from mcp_agentskills.core.security.password import verify_password
 from mcp_agentskills.models.user import User
 from mcp_agentskills.repositories.user import UserRepository
 
@@ -73,12 +72,6 @@ class AuthService:
             access_token=create_access_token(subject=str(user.id)),
             refresh_token=create_refresh_token(subject=str(user.id)),
         )
-
-    async def login(self, email: str, password: str) -> TokenPair:
-        user = await self.user_repo.get_by_email(email)
-        if not user or not verify_password(password, user.hashed_password):
-            raise ValueError("Invalid credentials")
-        return self.issue_token(user)
 
     async def login_ldap(self, username: str, password: str) -> TokenPair:
         import importlib

@@ -2,13 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from mcp_agentskills.config.settings import settings
 from mcp_agentskills.core.middleware.auth import get_current_active_user
-from mcp_agentskills.core.security.password import verify_password
 from mcp_agentskills.core.security.rbac import has_permission
 from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.audit_log import AuditLogRepository
 from mcp_agentskills.repositories.user import UserRepository
 from mcp_agentskills.schemas.auth import UserIdentityUpdate
-from mcp_agentskills.schemas.user import UserBindEmail, UserDelete, UserPasswordUpdate, UserResponse, UserUpdate
+from mcp_agentskills.schemas.user import UserBindEmail, UserDeleteConfirm, UserResponse, UserUpdate
 from mcp_agentskills.services.audit import AuditService
 from mcp_agentskills.services.user import UserService
 from mcp_agentskills.services.verification_code import get_verification_service
@@ -50,30 +49,29 @@ async def update_me(
     return updated
 
 
-@router.put("/me/password", response_model=UserResponse)
-async def change_password(
-    payload: UserPasswordUpdate,
+@router.post("/me/delete-request", status_code=status.HTTP_204_NO_CONTENT)
+async def request_delete_account(
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
-    if not verify_password(payload.current_password, current_user.hashed_password):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password")
-    service = UserService(UserRepository(session))
-    updated = await service.change_password(current_user, payload.new_password)
-    return updated
+    verification_service = get_verification_service(session)
+    await verification_service.send_code(current_user.email, "delete_account")
+    return None
 
 
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_me(
-    payload: UserDelete,
+    payload: UserDeleteConfirm,
     current_user=Depends(get_current_active_user),
     session=Depends(get_async_session),
 ):
-    service = UserService(UserRepository(session))
+    verification_service = get_verification_service(session)
     try:
-        await service.delete_user(current_user, payload.password)
+        await verification_service.verify_code(current_user.email, "delete_account", payload.code)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    service = UserService(UserRepository(session))
+    await service.delete_user(current_user)
     return None
 
 

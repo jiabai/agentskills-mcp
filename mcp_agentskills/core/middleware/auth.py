@@ -6,7 +6,7 @@ from mcp_agentskills.db.session import get_async_session
 from mcp_agentskills.repositories.user import UserRepository
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/email/login")
 
 
 async def get_current_user(token: str = Depends(oauth2_scheme), session=Depends(get_async_session)):

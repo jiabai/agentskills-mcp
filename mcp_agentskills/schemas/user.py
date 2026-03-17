@@ -35,13 +35,8 @@ class UserUpdate(BaseModel):
     username: str | None = Field(default=None, min_length=2, max_length=64)
 
 
-class UserPasswordUpdate(BaseModel):
-    current_password: str
-    new_password: str = Field(min_length=8)
-
-
-class UserDelete(BaseModel):
-    password: str
+class UserDeleteConfirm(BaseModel):
+    code: str = Field(min_length=6, max_length=6)
 
 
 class UserResponse(BaseModel):

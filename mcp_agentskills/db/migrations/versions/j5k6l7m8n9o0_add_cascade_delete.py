@@ -40,6 +40,12 @@ def upgrade() -> None:
                 "fk_skill_versions_skill_id", "skills", ["skill_id"], ["id"], ondelete="CASCADE"
             )
 
+        with op.batch_alter_table("request_metrics", schema=None) as batch_op:
+            batch_op.drop_constraint("fk_request_metrics_user_id", type_="foreignkey")
+            batch_op.create_foreign_key(
+                "fk_request_metrics_user_id", "users", ["user_id"], ["id"], ondelete="CASCADE"
+            )
+
         op.execute("PRAGMA foreign_keys=ON")
     else:
         inspector = sa.inspect(op.get_bind())
@@ -70,12 +76,25 @@ def upgrade() -> None:
             "fk_skill_versions_skill_id", "skill_versions", "skills", ["skill_id"], ["id"], ondelete="CASCADE"
         )
 
+        request_metrics_fks = inspector.get_foreign_keys("request_metrics")
+        for fk in request_metrics_fks:
+            if fk["constrained_columns"] == ["user_id"]:
+                op.drop_constraint(fk["name"], "request_metrics", type_="foreignkey")
+                break
+        op.create_foreign_key(
+            "fk_request_metrics_user_id", "request_metrics", "users", ["user_id"], ["id"], ondelete="CASCADE"
+        )
+
 
 def downgrade() -> None:
     dialect = _get_dialect_name()
 
     if dialect == "sqlite":
         op.execute("PRAGMA foreign_keys=OFF")
+
+        with op.batch_alter_table("request_metrics", schema=None) as batch_op:
+            batch_op.drop_constraint("fk_request_metrics_user_id", type_="foreignkey")
+            batch_op.create_foreign_key("fk_request_metrics_user_id", "users", ["user_id"], ["id"])
 
         with op.batch_alter_table("skill_versions", schema=None) as batch_op:
             batch_op.drop_constraint("fk_skill_versions_skill_id", type_="foreignkey")
@@ -91,6 +110,9 @@ def downgrade() -> None:
 
         op.execute("PRAGMA foreign_keys=ON")
     else:
+        op.drop_constraint("fk_request_metrics_user_id", "request_metrics", type_="foreignkey")
+        op.create_foreign_key("fk_request_metrics_user_id", "request_metrics", "users", ["user_id"], ["id"])
+
         op.drop_constraint("fk_skill_versions_skill_id", "skill_versions", type_="foreignkey")
         op.create_foreign_key("fk_skill_versions_skill_id", "skill_versions", "skills", ["skill_id"], ["id"])
 

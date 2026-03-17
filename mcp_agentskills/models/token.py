@@ -9,7 +9,7 @@ from mcp_agentskills.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixi
 class APIToken(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "api_tokens"
 
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(100))
     token_hash: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

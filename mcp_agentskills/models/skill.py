@@ -10,7 +10,7 @@ class Skill(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "skills"
     __table_args__ = (UniqueConstraint("user_id", "name", name="uix_user_skill_name"),)
 
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id"), index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), index=True)
     name: Mapped[str] = mapped_column(String(100))
     description: Mapped[str] = mapped_column(String(500), default="")
     tags: Mapped[list[str]] = mapped_column(JSON, default=list)

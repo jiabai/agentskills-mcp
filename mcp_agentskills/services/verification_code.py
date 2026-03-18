@@ -19,7 +19,7 @@ from mcp_agentskills.models.verification_code import VerificationCode
 from mcp_agentskills.services.email_sender import EmailSender, get_email_sender
 
 
-Purpose = Literal["login", "register", "bind_email"]
+Purpose = Literal["login", "register", "bind_email", "delete_account"]
 
 
 @dataclass

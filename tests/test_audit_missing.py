@@ -1,6 +1,4 @@
 import os
-import io
-import zipfile
 import jwt
 import pytest
 from sqlalchemy import select
@@ -130,10 +128,10 @@ async def test_token_delete_creates_audit_log(client, async_session):
         headers=headers,
     )
     assert delete_response.status_code == 204
-    query = select(AuditLog).where(
-        AuditLog.action == "token.delete",
+    revoke_query = select(AuditLog).where(
+        AuditLog.action == "token.revoke",
         AuditLog.target == token_id,
     )
-    result = await async_session.execute(query)
-    event = result.scalar_one_or_none()
-    assert event is not None
+    revoke_result = await async_session.execute(revoke_query)
+    revoke_event = revoke_result.scalar_one_or_none()
+    assert revoke_event is not None

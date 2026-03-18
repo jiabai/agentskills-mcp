@@ -118,7 +118,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 |------|--------|---------|
 | Web框架 | FastAPI | >=0.109.0 |
 | ORM | SQLAlchemy 2.0 | >=2.0.0 |
-| 数据库 | PostgreSQL | >=14.0 |
+| 数据库 | PostgreSQL（生产推荐） | >=14.0；代码兼容 async SQLAlchemy URL |
 | 认证 | PyJWT + passlib | 最新版 |
 | 文件存储 | 本地文件系统 + 可选 S3/MinIO 归档 | 本地默认，S3 需 boto3 |
 | MCP框架 | FlowLLM | >=0.2.0.7 |
@@ -149,7 +149,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 |------|---------|---------|------|---------|-----------|
 | **stdio** | `python -m mcp_agentskills.main`<br>`agentskills-mcp` | [main.py](../mcp_agentskills/main.py) | ❌ 无 | ❌ | `{skill_dir}/{skill_name}/SKILL.md` |
 | **单用户 SSE** | `agentskills-mcp config=default mcp.transport=sse` | [main.py](../mcp_agentskills/main.py) | ❌ 无 | ❌ | `{skill_dir}/{skill_name}/SKILL.md` |
-| **HTTP API** | `uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000` | [api_app.py](../mcp_agentskills/api_app.py) | ✅ API Token | ✅ | `{skill_dir}/{user_id}/{skill_name}/SKILL.md` |
+| **HTTP API** | `uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000` | [api_app.py](../mcp_agentskills/api_app.py) | ✅ API Token（优先），JWT Access Token（兼容） | ✅ | `{skill_dir}/{user_id}/{skill_name}/SKILL.md` |
 
 **核心区分逻辑：**
 
@@ -245,7 +245,7 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 | | `user.password.change` | ⏭ 已跳过 | 密码登录已移除，无修改密码功能 |
 | | `user.delete` | ✅ 已覆盖 | api/v1/users.py:62 |
 | **令牌** | `token.create` | ✅ 已覆盖 | api/v1/tokens.py:38 |
-| | `token.delete/revoke` | ✅ 已覆盖 | api/v1/tokens.py:63 |
+| | `token.revoke` | ✅ 已覆盖 | api/v1/tokens.py:63 |
 
 **版本自动递增**
 - 默认策略：SemVer patch 递增（可通过 `SKILL_VERSION_BUMP_STRATEGY` 配置 `patch/minor`）

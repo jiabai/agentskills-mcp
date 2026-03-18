@@ -76,7 +76,7 @@ async def delete_token(
         audit_service = AuditService(AuditLogRepository(session))
         await audit_service.create_event(
             actor_id=current_user.id,
-            action="token.delete",
+            action="token.revoke",
             target=token_id,
             ip=request.client.host if request.client else "",
             user_agent=request.headers.get("user-agent", ""),

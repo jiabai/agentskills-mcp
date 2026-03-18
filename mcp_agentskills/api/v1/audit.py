@@ -77,7 +77,7 @@ async def export_audit_logs(
             "timestamp": item.timestamp.isoformat().replace("+00:00", "Z"),
             "ip": item.ip,
             "user_agent": item.user_agent,
-            "metadata": item.details,
+            "details": item.details,
         }
         for item in items
     ]

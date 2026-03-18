@@ -86,7 +86,7 @@
 
 ```env
 DEFAULT_SKILL_VISIBILITY=private
-RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.download","skill.execute"],"viewer":["skill.list","skill.read","skill.download"]}
+RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.execute"],"viewer":["skill.list","skill.read"]}
 ```
 
 ---
@@ -145,11 +145,11 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 
 系统支持三种传输模式，通过不同的启动入口、认证机制和用户上下文进行区分：
 
-| 模式 | 启动方式 | 代码入口 | 认证 | 用户隔离 | Skill 路径 |
-|------|---------|---------|------|---------|-----------|
-| **stdio** | `python -m mcp_agentskills.main`<br>`agentskills-mcp` | [main.py](../mcp_agentskills/main.py) | ❌ 无 | ❌ | `{skill_dir}/{skill_name}/SKILL.md` |
-| **单用户 SSE** | `agentskills-mcp config=default mcp.transport=sse` | [main.py](../mcp_agentskills/main.py) | ❌ 无 | ❌ | `{skill_dir}/{skill_name}/SKILL.md` |
-| **HTTP API** | `uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000` | [api_app.py](../mcp_agentskills/api_app.py) | ✅ API Token（优先），JWT Access Token（兼容） | ✅ | `{skill_dir}/{user_id}/{skill_name}/SKILL.md` |
+| 模式           | 启动方式                                                             | 代码入口                                        | 认证                                   | 用户隔离 | Skill 路径                                      |
+| ------------ | ---------------------------------------------------------------- | ------------------------------------------- | ------------------------------------ | ---- | --------------------------------------------- |
+| **stdio**    | `python -m mcp_agentskills.main`<br>`agentskills-mcp`            | [main.py](../mcp_agentskills/main.py)       | ❌ 无                                  | ❌    | `{skill_dir}/{skill_name}/SKILL.md`           |
+| **单用户 SSE**  | `agentskills-mcp config=default mcp.transport=sse`               | [main.py](../mcp_agentskills/main.py)       | ❌ 无                                  | ❌    | `{skill_dir}/{skill_name}/SKILL.md`           |
+| **HTTP API** | `uvicorn mcp_agentskills.api_app:app --host 0.0.0.0 --port 8000` | [api_app.py](../mcp_agentskills/api_app.py) | ✅ API Token（优先），JWT Access Token（兼容） | ✅    | `{skill_dir}/{user_id}/{skill_name}/SKILL.md` |
 
 **核心区分逻辑：**
 
@@ -324,7 +324,8 @@ RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    API Gateway Layer                         │
-│  FastAPI + Middleware (CORS, Auth, Rate Limit, Logging)     │
+│  Middleware: CORS | Rate Limit | Logging | Deprecation      │
+│  Auth: Route-level Dependency Injection                      │
 └─────────────────────────────────────────────────────────────┘
                               │
 ┌─────────────────────────────────────────────────────────────┐
@@ -1282,6 +1283,7 @@ class DeprecationNotifier:
 
 - 仅对具备可见性权限的用户开放
 - 需要 RBAC 权限：`skill.download`
+- **安全提示**：`skill.download` 默认仅授予 `admin` 角色。此权限允许下载完整技能源码，属于高敏感权限，建议仅在确有需要时通过 `RBAC_ROLE_PERMISSIONS` 配置单独授予。
 
 #### GET `/api/v1/audit/logs`
 
@@ -2155,7 +2157,7 @@ DEFAULT_ROLE=member
 DEFAULT_USER_STATUS=active
 
 # RBAC 权限矩阵（JSON 字符串）
-RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.download","skill.execute"],"viewer":["skill.list","skill.read","skill.download"]}
+RBAC_ROLE_PERMISSIONS={"admin":["*"],"member":["skill.list","skill.read","skill.create","skill.update","skill.delete","skill.upload","skill.execute"],"viewer":["skill.list","skill.read"]}
 
 # SSO Claims 映射
 SSO_JWT_SECRET=

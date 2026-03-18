@@ -14,10 +14,9 @@ _DEFAULT_ROLE_PERMISSIONS = {
         "skill.update",
         "skill.delete",
         "skill.upload",
-        "skill.download",
         "skill.execute",
     ],
-    "viewer": ["skill.list", "skill.read", "skill.download"],
+    "viewer": ["skill.list", "skill.read"],
 }
 
 

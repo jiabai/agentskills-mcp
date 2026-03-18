@@ -1,32 +1,35 @@
 import base64
 import hashlib
 import io
+import os
 import zipfile
 from datetime import datetime, timezone
 
+import jwt
 import pytest
+
+
+async def _sso_login_with_role(client, email, username, role="member"):
+    payload = {
+        "email": email,
+        "username": username,
+        "enterprise_id": "test-ent",
+        "team_id": "test-team",
+        "role": role,
+        "status": "active",
+        "iss": os.environ["SSO_JWT_ISSUER"],
+        "aud": os.environ["SSO_JWT_AUDIENCE"],
+    }
+    token = jwt.encode(payload, os.environ["SSO_JWT_SECRET"], algorithm="HS256")
+    response = await client.post("/api/v1/auth/sso/login", json={"id_token": token})
+    assert response.status_code == 200
+    return response.json()["access_token"]
 
 
 @pytest.mark.asyncio
 async def test_skill_download_returns_encrypted_payload(client, tmp_path, monkeypatch):
     monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
-    await client.post(
-        "/api/v1/auth/verification-code",
-        json={"email": "download@example.com", "purpose": "register"},
-    )
-    await client.post(
-        "/api/v1/auth/register",
-        json={"email": "download@example.com", "username": "downloader", "code": "123456"},
-    )
-    await client.post(
-        "/api/v1/auth/verification-code",
-        json={"email": "download@example.com", "purpose": "login"},
-    )
-    login = await client.post(
-        "/api/v1/auth/login",
-        json={"email": "download@example.com", "code": "123456"},
-    )
-    access = login.json()["access_token"]
+    access = await _sso_login_with_role(client, "download@example.com", "downloader", role="admin")
     headers = {"Authorization": f"Bearer {access}"}
     created = await client.post(
         "/api/v1/skills",
@@ -59,3 +62,32 @@ async def test_skill_download_returns_encrypted_payload(client, tmp_path, monkey
     assert payload["version"] == "1.0.0"
     expires_at = datetime.fromisoformat(payload["expires_at"].replace("Z", "+00:00"))
     assert expires_at > datetime.now(timezone.utc)
+
+
+@pytest.mark.asyncio
+async def test_skill_download_denied_without_permission(client, tmp_path, monkeypatch):
+    monkeypatch.setenv("SKILL_STORAGE_PATH", str(tmp_path))
+    access = await _sso_login_with_role(client, "nodownload@example.com", "nodownloader", role="member")
+    headers = {"Authorization": f"Bearer {access}"}
+    created = await client.post(
+        "/api/v1/skills",
+        json={"name": "skilldl2", "description": "desc"},
+        headers=headers,
+    )
+    skill_id = created.json()["id"]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("SKILL.md", "---\nname: skilldl2\nversion: 1.0.0\n---\nbody")
+    buffer.seek(0)
+    await client.post(
+        "/api/v1/skills/upload",
+        data={"skill_uuid": skill_id},
+        files={"file": ("skill.zip", buffer.read(), "application/zip")},
+        headers=headers,
+    )
+    response = await client.post(
+        "/api/v1/skills/download",
+        json={"skill_uuid": skill_id, "version": "1.0.0"},
+        headers=headers,
+    )
+    assert response.status_code == 403

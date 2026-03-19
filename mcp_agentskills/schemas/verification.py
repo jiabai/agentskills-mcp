@@ -5,7 +5,7 @@ from pydantic import BaseModel, EmailStr, Field
 
 class VerificationCodeRequest(BaseModel):
     email: EmailStr
-    purpose: Literal["login", "register", "bind_email"]
+    purpose: Literal["login", "register", "bind_email", "delete_account"]
 
 
 class VerificationCodeResponse(BaseModel):

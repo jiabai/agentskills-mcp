@@ -339,7 +339,7 @@
 ### 7.1 认证接口
 
 - [x] POST `/api/v1/auth/verification-code`
-  - [x] 支持 purpose: `login` / `register` / `bind_email`
+  - [x] 支持 purpose: `login` / `register` / `bind_email` / `delete_account`
   - [x] 返回 `sent`、`expires_in`、`resend_interval`、`max_attempts`、`attempts_left`
   - [x] 重发过频返回 429（`RESEND_TOO_FREQUENT`）
 - [x] POST `/api/v1/auth/register`

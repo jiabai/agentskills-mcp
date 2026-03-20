@@ -8,6 +8,7 @@
 - 验收检查清单：[checklist.md](./checklist.md)
 - 部署与运维指南：[deployment.md](./deployment.md)
 - 工具说明（MCP Tools）：[tools.md](./tools.md)
+- 前端设计文档：[frontend-design](./frontend-design/)
 
 > 说明：`checklist.md` 已新增“勾选证据规范”。每次将 `- [ ]` 改为 `- [x]` 时，建议同步记录日期、验证命令与结果摘要；缺少验证证据时保持 `- [ ]` 并标注“（需确认）”。
 

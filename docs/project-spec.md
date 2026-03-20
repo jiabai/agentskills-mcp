@@ -955,7 +955,7 @@ class DeprecationNotifier:
 **请求字段**
 
 - `email`: 邮箱地址
-- `purpose`: 业务场景，取值 `login` / `register` / `bind_email`
+- `purpose`: 业务场景，取值 `login` / `register` / `bind_email` / `delete_account`
 
 **响应**
 
